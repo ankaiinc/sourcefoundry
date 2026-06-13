@@ -1,3 +1,4 @@
+import { fetchDiscoveryEntries } from './ingest/discovery.js';
 import { entryPayload, parseFeed, sourceItemHash } from './ingest/rss.js';
 import type { SignalRepository } from './repository.js';
 import { scoreEntry } from './scoring.js';
@@ -155,28 +156,23 @@ async function fetchSource(
     if (source.etag) headers['If-None-Match'] = source.etag;
     if (source.lastModified) headers['If-Modified-Since'] = source.lastModified;
 
-    const response = await fetchFn(source.url, { headers, signal: controller.signal });
+    const fetched = await fetchSourceEntries(source, fetchFn, headers, controller.signal);
     clearTimeout(timeout);
-    httpStatus = response.status;
+    httpStatus = fetched.httpStatus;
 
-    if (response.status === 304) {
+    if (fetched.notModified) {
       await recordSuccess(repo, source, job, {
         httpStatus,
         durationMs: Date.now() - started,
         itemsSeen,
         itemsInserted,
-        etag: response.headers.get('etag'),
-        lastModified: response.headers.get('last-modified'),
+        etag: fetched.etag,
+        lastModified: fetched.lastModified,
       });
       return { itemsProcessed: 0, detail: { sourceId: source.id, status: 'not_modified' } };
     }
 
-    if (!response.ok) {
-      throw new Error(`Fetch failed: HTTP ${response.status}`);
-    }
-
-    const xml = await response.text();
-    const entries = parseFeed(xml, source.url).slice(0, source.maxItemsPerFetch);
+    const entries = fetched.entries.slice(0, source.maxItemsPerFetch);
     itemsSeen = entries.length;
 
     for (const entry of entries) {
@@ -221,8 +217,8 @@ async function fetchSource(
       durationMs: Date.now() - started,
       itemsSeen,
       itemsInserted,
-      etag: response.headers.get('etag'),
-      lastModified: response.headers.get('last-modified'),
+      etag: fetched.etag,
+      lastModified: fetched.lastModified,
     });
 
     return {
@@ -250,6 +246,52 @@ async function fetchSource(
     await repo.markSourceFailure(source.id, { nextFetchAt, error: message });
     throw error;
   }
+}
+
+async function fetchSourceEntries(
+  source: SignalSource,
+  fetchFn: typeof fetch,
+  headers: Record<string, string>,
+  signal: AbortSignal,
+): Promise<{
+  entries: ReturnType<typeof parseFeed>;
+  httpStatus: number | null;
+  notModified: boolean;
+  etag: string | null;
+  lastModified: string | null;
+}> {
+  if (source.sourceType === 'web' && source.metadata.mode === 'discovery') {
+    const discovered = await fetchDiscoveryEntries(source, fetchFn, signal);
+    return {
+      entries: discovered.entries,
+      httpStatus: discovered.httpStatus,
+      notModified: false,
+      etag: null,
+      lastModified: null,
+    };
+  }
+
+  const response = await fetchFn(source.url, { headers, signal });
+  const httpStatus = response.status;
+  const etag = response.headers.get('etag');
+  const lastModified = response.headers.get('last-modified');
+
+  if (response.status === 304) {
+    return { entries: [], httpStatus, notModified: true, etag, lastModified };
+  }
+
+  if (!response.ok) {
+    throw new Error(`Fetch failed: HTTP ${response.status}`);
+  }
+
+  const xml = await response.text();
+  return {
+    entries: parseFeed(xml, source.url),
+    httpStatus,
+    notModified: false,
+    etag,
+    lastModified,
+  };
 }
 
 async function recordSuccess(
