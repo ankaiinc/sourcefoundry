@@ -1,0 +1,40 @@
+app = "sourcefoundry"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  SOURCEFOUNDRY_PORT = "8080"
+  SOURCEFOUNDRY_WORKER_INTERVAL_MS = "30000"
+  SOURCEFOUNDRY_WORKER_CONCURRENCY = "3"
+  SOURCEFOUNDRY_STALE_JOB_MINUTES = "30"
+  SOURCEFOUNDRY_MAX_ATTEMPTS = "5"
+
+[processes]
+  api = "node dist/src/server.js"
+  worker = "node dist/src/worker.js"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["api"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 60
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["api"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  processes = ["worker"]
