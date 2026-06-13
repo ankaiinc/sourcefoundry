@@ -125,7 +125,7 @@ function requestBody(
   if (provider === 'tavily') {
     const token = discoveryToken(source);
     if (!token) throw new Error('Tavily discovery source is missing TAVILY_API_KEY');
-    return JSON.stringify({
+    const body: JsonRecord = {
       api_key: token,
       query,
       topic: firstString(source.metadata.topic) || 'news',
@@ -133,7 +133,12 @@ function requestBody(
       max_results: limit,
       include_answer: false,
       include_raw_content: true,
-    });
+    };
+    const includeDomains = stringArray(source.metadata.include_domains);
+    const excludeDomains = stringArray(source.metadata.exclude_domains);
+    if (includeDomains.length > 0) body.include_domains = includeDomains;
+    if (excludeDomains.length > 0) body.exclude_domains = excludeDomains;
+    return JSON.stringify(body);
   }
 
   return JSON.stringify({ query, limit });
@@ -228,6 +233,12 @@ function firstString(...values: unknown[]): string {
 
 function objectValue(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonRecord) : {};
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
 }
 
 function parseDate(input: string): string | null {

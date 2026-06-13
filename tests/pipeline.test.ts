@@ -128,6 +128,7 @@ describe('signal pipeline', () => {
           provider: 'tavily',
           queries: ['pricing backlash product decision'],
           max_results_per_query: 2,
+          exclude_domains: ['aol.com', 'yahoo.com'],
           relevance_terms: ['pricing', 'product', 'decision'],
         },
       });
@@ -161,6 +162,7 @@ describe('signal pipeline', () => {
         max_results: 2,
         include_answer: false,
         include_raw_content: true,
+        exclude_domains: ['aol.com', 'yahoo.com'],
       }]);
       expect(result.itemsProcessed).toBe(1);
       expect(repo.items.size).toBe(1);
