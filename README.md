@@ -49,7 +49,9 @@ candidate score.
 
 ```bash
 npm run reconcile:jobs
-npm run reconcile:jobs -- --apply --confirm=cancel-duplicate-active-jobs
+npm run reconcile:jobs -- --apply --confirm=cancel-duplicate-active-jobs \
+  --expect-duplicate-jobs=<dry-run-count> \
+  --expect-duplicate-groups=<dry-run-count>
 ```
 
 Authenticated operational inspection is available at

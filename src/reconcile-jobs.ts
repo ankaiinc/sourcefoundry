@@ -15,6 +15,13 @@ export type ActiveJobReconciliation = {
   uniqueGuardInstalled: boolean;
 };
 
+type ReconcileOptions = {
+  apply: boolean;
+  confirmation?: string;
+  expectedDuplicateJobs?: number;
+  expectedDuplicateGroups?: number;
+};
+
 type Queryable = Pick<pg.Pool, 'query'> | Pick<pg.PoolClient, 'query'>;
 
 async function activeSummary(db: Queryable): Promise<{
@@ -26,7 +33,7 @@ async function activeSummary(db: Queryable): Promise<{
     WITH grouped AS (
       SELECT tenant_id, job_type, entity_type, entity_id, count(*)::int AS active_count
       FROM sourcefoundry_jobs
-      WHERE status IN ('queued', 'running')
+      WHERE status IN ('queued', 'running') AND entity_id IS NOT NULL
       GROUP BY tenant_id, job_type, entity_type, entity_id
     )
     SELECT
@@ -45,10 +52,26 @@ async function activeSummary(db: Queryable): Promise<{
 
 export async function reconcileActiveJobs(
   pool: pg.Pool,
-  options: { apply: boolean; confirmation?: string },
+  options: ReconcileOptions,
 ): Promise<ActiveJobReconciliation> {
+  const expectedDuplicateJobs = options.expectedDuplicateJobs;
+  const expectedDuplicateGroups = options.expectedDuplicateGroups;
   if (options.apply && options.confirmation !== CONFIRMATION) {
     throw new Error(`Refusing to mutate jobs without --confirm=${CONFIRMATION}`);
+  }
+  if (options.apply && (
+    typeof expectedDuplicateJobs !== 'number' ||
+    !Number.isSafeInteger(expectedDuplicateJobs) ||
+    expectedDuplicateJobs < 0
+  )) {
+    throw new Error('Refusing to mutate jobs without --expect-duplicate-jobs=<dry-run count>');
+  }
+  if (options.apply && (
+    typeof expectedDuplicateGroups !== 'number' ||
+    !Number.isSafeInteger(expectedDuplicateGroups) ||
+    expectedDuplicateGroups < 0
+  )) {
+    throw new Error('Refusing to mutate jobs without --expect-duplicate-groups=<dry-run count>');
   }
   const before = await activeSummary(pool);
   if (!options.apply) {
@@ -66,8 +89,20 @@ export async function reconcileActiveJobs(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query("SET LOCAL lock_timeout = '5s'");
+    await client.query("SET LOCAL statement_timeout = '15min'");
     await client.query('LOCK TABLE sourcefoundry_jobs IN SHARE ROW EXCLUSIVE MODE');
     const lockedBefore = await activeSummary(client);
+    if (lockedBefore.duplicateJobs !== expectedDuplicateJobs) {
+      throw new Error(
+        `Duplicate job count changed after lock: expected ${expectedDuplicateJobs}, observed ${lockedBefore.duplicateJobs}`,
+      );
+    }
+    if (lockedBefore.duplicateGroups !== expectedDuplicateGroups) {
+      throw new Error(
+        `Duplicate group count changed after lock: expected ${expectedDuplicateGroups}, observed ${lockedBefore.duplicateGroups}`,
+      );
+    }
     const cancelled = await client.query(`
       WITH ranked AS (
         SELECT
@@ -80,7 +115,7 @@ export async function reconcileActiveJobs(
               id
           ) AS position
         FROM sourcefoundry_jobs
-        WHERE status IN ('queued', 'running')
+        WHERE status IN ('queued', 'running') AND entity_id IS NOT NULL
       )
       UPDATE sourcefoundry_jobs AS jobs
       SET
@@ -94,21 +129,45 @@ export async function reconcileActiveJobs(
         )
       FROM ranked
       WHERE jobs.id = ranked.id AND ranked.position > 1
-      RETURNING jobs.id
     `);
+    const cancelledJobs = cancelled.rowCount ?? 0;
+    const after = await activeSummary(client);
+    const expectedActiveAfter = lockedBefore.activeJobs - lockedBefore.duplicateJobs;
+    if (
+      cancelledJobs !== lockedBefore.duplicateJobs ||
+      after.duplicateJobs !== 0 ||
+      after.duplicateGroups !== 0 ||
+      after.activeJobs !== expectedActiveAfter
+    ) {
+      throw new Error(
+        `Reconciliation postcondition failed: cancelled=${cancelledJobs}/${lockedBefore.duplicateJobs}, ` +
+        `active=${after.activeJobs}/${expectedActiveAfter}, remaining_duplicates=${after.duplicateJobs}, ` +
+        `remaining_groups=${after.duplicateGroups}`,
+      );
+    }
     await client.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS sourcefoundry_jobs_one_active_entity_idx
+      CREATE UNIQUE INDEX sourcefoundry_jobs_one_active_entity_idx
       ON sourcefoundry_jobs (tenant_id, job_type, entity_type, entity_id)
       WHERE status IN ('queued', 'running') AND entity_id IS NOT NULL
     `);
-    const after = await activeSummary(client);
+    const guard = await client.query(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname = 'sourcefoundry_jobs_one_active_entity_idx'
+      ) AS installed
+    `);
+    if (guard.rows[0]?.installed !== true) {
+      throw new Error('Reconciliation unique guard could not be verified before commit');
+    }
     await client.query('COMMIT');
     return {
       mode: 'applied',
       activeJobsBefore: lockedBefore.activeJobs,
       duplicateJobs: lockedBefore.duplicateJobs,
       duplicateGroups: lockedBefore.duplicateGroups,
-      cancelledJobs: cancelled.rowCount ?? 0,
+      cancelledJobs,
       activeJobsAfter: after.activeJobs,
       uniqueGuardInstalled: true,
     };
@@ -124,6 +183,8 @@ async function main(): Promise<void> {
   const args = new Set(process.argv.slice(2));
   const apply = args.has('--apply');
   const confirmation = [...args].find((arg) => arg.startsWith('--confirm='))?.slice('--confirm='.length);
+  const expectedDuplicateJobs = integerArg(args, '--expect-duplicate-jobs=');
+  const expectedDuplicateGroups = integerArg(args, '--expect-duplicate-groups=');
   const config = loadConfig();
   const pool = new Pool({
     connectionString: config.databaseUrl,
@@ -131,14 +192,29 @@ async function main(): Promise<void> {
     max: 2,
   });
   try {
-    const result = await reconcileActiveJobs(pool, { apply, ...(confirmation ? { confirmation } : {}) });
+    const result = await reconcileActiveJobs(pool, {
+      apply,
+      ...(confirmation ? { confirmation } : {}),
+      ...(expectedDuplicateJobs !== undefined ? { expectedDuplicateJobs } : {}),
+      ...(expectedDuplicateGroups !== undefined ? { expectedDuplicateGroups } : {}),
+    });
     console.log(JSON.stringify(result, null, 2));
     if (!apply && result.duplicateJobs > 0) {
-      console.log(`Dry run only. Apply requires --apply --confirm=${CONFIRMATION}`);
+      console.log(
+        `Dry run only. Apply requires --apply --confirm=${CONFIRMATION} ` +
+        `--expect-duplicate-jobs=${result.duplicateJobs} --expect-duplicate-groups=${result.duplicateGroups}`,
+      );
     }
   } finally {
     await pool.end();
   }
+}
+
+function integerArg(args: Set<string>, prefix: string): number | undefined {
+  const raw = [...args].find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+  if (raw === undefined) return undefined;
+  if (!/^\d+$/.test(raw)) return Number.NaN;
+  return Number(raw);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
