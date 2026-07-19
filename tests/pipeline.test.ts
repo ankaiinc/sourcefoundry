@@ -281,7 +281,7 @@ describe('signal pipeline', () => {
         search_depth: 'advanced',
         max_results: 2,
         include_answer: false,
-        include_raw_content: true,
+        include_raw_content: false,
         exclude_domains: ['aol.com', 'yahoo.com'],
       }]);
       expect(result.itemsProcessed).toBe(1);

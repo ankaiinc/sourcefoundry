@@ -174,15 +174,25 @@ async function fetchSource(
   let itemsInserted = 0;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), source.timeoutSeconds * 1000);
     const headers: Record<string, string> = {};
     if (source.etag) headers['If-None-Match'] = source.etag;
     if (source.lastModified) headers['If-Modified-Since'] = source.lastModified;
 
+    const queryOverride = await enrichmentQueries(repo, source);
+    // Umbrella deadline for the whole source. Discovery runs its queries
+    // sequentially, each with its own timeoutSeconds budget, so this ceiling
+    // must leave room for every query plus a small buffer — otherwise it would
+    // re-impose one shared budget across all queries and abort them mid-flight.
+    const queryCount = Math.max(1, queryOverride?.length
+      ?? (Array.isArray(source.metadata.queries) ? source.metadata.queries.length : 1));
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      source.timeoutSeconds * 1000 * queryCount + 5000,
+    );
+
     let fetched: Awaited<ReturnType<typeof fetchSourceEntries>>;
     try {
-      const queryOverride = await enrichmentQueries(repo, source);
       fetched = await fetchSourceEntries(source, fetchFn, headers, controller.signal, queryOverride);
     } finally {
       clearTimeout(timeout);

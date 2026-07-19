@@ -288,4 +288,71 @@ describe('official social discovery adapters', () => {
     );
     expect(result.entries).toEqual([]);
   });
+
+  it('runs every Tavily query and defaults raw-content off, giving each query its own budget', async () => {
+    const original = process.env.TAVILY_API_KEY;
+    process.env.TAVILY_API_KEY = 'tavily-test-token';
+    try {
+      const tavilySource = source('tavily', 'https://api.tavily.com/search#attention');
+      tavilySource.timeoutSeconds = 20;
+      tavilySource.metadata = {
+        mode: 'discovery', provider: 'tavily', search_depth: 'advanced', max_results_per_query: 5,
+        queries: ['q one', 'q two', 'q three'],
+      };
+      const bodies: Array<{ query: string; include_raw_content: boolean; aborted: boolean }> = [];
+      const result = await fetchDiscoveryEntries(
+        tavilySource,
+        (async (_input: RequestInfo | URL, init?: RequestInit) => {
+          const parsed = JSON.parse(String(init?.body));
+          bodies.push({
+            query: parsed.query,
+            include_raw_content: parsed.include_raw_content,
+            aborted: init?.signal?.aborted ?? false,
+          });
+          return new Response(JSON.stringify({ results: [{
+            title: `Result for ${parsed.query}`,
+            url: `https://linkedin.com/posts/${parsed.query.replace(/\s+/g, '-')}`,
+            content: 'AI agent production reliability evidence.',
+            published_date: '2026-07-19T10:00:00Z',
+          }] }), { status: 200 });
+        }) as typeof fetch,
+        new AbortController().signal,
+      );
+
+      // All three queries ran — none was starved by a shared, already-spent budget.
+      expect(bodies.map((b) => b.query)).toEqual(['q one', 'q two', 'q three']);
+      expect(bodies.every((b) => b.aborted === false)).toBe(true);
+      // Raw content is off unless a source explicitly opts in.
+      expect(bodies.every((b) => b.include_raw_content === false)).toBe(true);
+      expect(result.entries.length).toBe(3);
+    } finally {
+      if (original === undefined) delete process.env.TAVILY_API_KEY;
+      else process.env.TAVILY_API_KEY = original;
+    }
+  });
+
+  it('lets a Tavily source opt back into raw content explicitly', async () => {
+    const original = process.env.TAVILY_API_KEY;
+    process.env.TAVILY_API_KEY = 'tavily-test-token';
+    try {
+      const tavilySource = source('tavily', 'https://api.tavily.com/search#attention');
+      tavilySource.metadata = {
+        mode: 'discovery', provider: 'tavily', include_raw_content: true,
+        queries: ['q one'], max_results_per_query: 5,
+      };
+      let seen: boolean | undefined;
+      await fetchDiscoveryEntries(
+        tavilySource,
+        (async (_input: RequestInfo | URL, init?: RequestInit) => {
+          seen = JSON.parse(String(init?.body)).include_raw_content;
+          return new Response(JSON.stringify({ results: [] }), { status: 200 });
+        }) as typeof fetch,
+        new AbortController().signal,
+      );
+      expect(seen).toBe(true);
+    } finally {
+      if (original === undefined) delete process.env.TAVILY_API_KEY;
+      else process.env.TAVILY_API_KEY = original;
+    }
+  });
 });

@@ -37,22 +37,35 @@ export async function fetchDiscoveryEntries(
   let httpStatus: number | null = null;
 
   for (const query of queries) {
+    // Each query gets its own timeout budget. Previously a single source-level
+    // deadline covered the whole sequential loop, so a source with N queries
+    // effectively gave each query timeoutSeconds/N — from Fly's region that was
+    // enough to abort every Tavily search before it returned (and Tavily bills
+    // only completed searches, so the aborted calls cost nothing but produced
+    // nothing). A per-query timer removes that starvation; the caller's outer
+    // signal still bounds the total run.
+    const queryController = new AbortController();
+    const queryTimer = setTimeout(() => queryController.abort(), source.timeoutSeconds * 1000);
     const init: RequestInit = {
       method: requestMethod(source),
       headers: requestHeaders(source),
-      signal,
+      signal: AbortSignal.any([signal, queryController.signal]),
     };
     const body = requestBody(source, provider, query, limit);
     if (body !== undefined) init.body = body;
 
-    const response = await fetchFn(requestUrl(source, query, limit), init);
-    httpStatus = response.status;
-    if (!response.ok) throw new Error(`Discovery fetch failed: HTTP ${response.status}`);
+    try {
+      const response = await fetchFn(requestUrl(source, query, limit), init);
+      httpStatus = response.status;
+      if (!response.ok) throw new Error(`Discovery fetch failed: HTTP ${response.status}`);
 
-    const json = (await response.json()) as unknown;
-    for (const item of normalizeDiscoveryItems(json, provider)) {
-      const entry = sourceEntryFromDiscoveryItem(item, source, query, provider);
-      if (entry) entries.push(entry);
+      const json = (await response.json()) as unknown;
+      for (const item of normalizeDiscoveryItems(json, provider)) {
+        const entry = sourceEntryFromDiscoveryItem(item, source, query, provider);
+        if (entry) entries.push(entry);
+      }
+    } finally {
+      clearTimeout(queryTimer);
     }
   }
 
@@ -187,7 +200,10 @@ function requestBody(
       search_depth: firstString(source.metadata.search_depth) || 'advanced',
       max_results: limit,
       include_answer: false,
-      include_raw_content: true,
+      // Raw page content bloats each advanced-search response and slows it
+      // materially. Discovery only needs title/url/publish-time/snippet to rank
+      // candidates, so default it off and let a source opt back in explicitly.
+      include_raw_content: firstBoolean(source.metadata.include_raw_content) ?? false,
     };
     const includeDomains = stringArray(source.metadata.include_domains);
     const excludeDomains = stringArray(source.metadata.exclude_domains);
