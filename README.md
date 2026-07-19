@@ -31,6 +31,10 @@ canonical URL, source item identity, provider, query when available, content
 hash, fetched/published timestamps, age, field-completeness flags, source
 reliability, and consecutive-failure state. Consumers should lower confidence
 for incomplete or degraded results instead of reconstructing missing evidence.
+When a bounded social enrichment source succeeds, the same contract can also
+include observed comment totals, returned-comment count, partial/truncated
+state, and at most ten named participants with short excerpts and public links.
+This is conversation evidence, not a contact database or action permission.
 Candidates with the same stable signal key are returned as one bounded evidence
 bundle. A source contributes at most one observation, each bundle retains at
 most three observations, and repetition never increases the representative
@@ -125,10 +129,19 @@ Official social discovery adapters use the same neutral candidate contract:
   Apify public-data canary. LinkedIn does not provide an equivalent broad
   official post-search API; SourceFoundry records the provider so consumers can
   lower confidence accordingly.
-- Apify: `provider: "apify"` and `APIFY_API_TOKEN`. The source URL should be a
-  synchronous dataset-items endpoint. `metadata.request_template` may contain
-  `$query` and `$limit` placeholders. Use this only for bounded public-data
-  enrichment; never supply browser cookies or use an Actor for public actions.
+- Apify: `provider: "apify"`, `mode: "enrichment"`, and `APIFY_API_TOKEN`.
+  SourceFoundry automatically selects the highest-ranked concrete LinkedIn post
+  URLs that do not have fresh enrichment evidence; profiles, feeds, searches,
+  login pages, and non-LinkedIn URLs are rejected before a request. The source
+  URL must be the HTTPS `api.apify.com` synchronous Actor dataset endpoint with
+  no token in the URL. `metadata.request_template` must contain `$query` and may
+  use `$limit`. Cookie, `li_at`, and session-token fields are rejected before
+  source configuration can be stored. Each source declares both a per-request
+  and whole-run spend ceiling; the batch is rejected before its first request
+  when its mathematical maximum exceeds policy. Fresh evidence is not fetched
+  again until `reenrich_after_hours` elapses. Use this only for bounded
+  public-data enrichment; an Actor can never create a public action through
+  SourceFoundry.
 
 For Tavily, use `url: "https://api.tavily.com/search"` and
 `metadata.provider: "tavily"`. SourceFoundry sends `topic: "news"`,
@@ -184,3 +197,19 @@ lane also requires `--confirm-worker-provider-secrets-configured`; this is an
 operator acknowledgement that the named secrets were verified in the worker,
 not permission to expose them. LinkedIn remains on the provider-neutral Tavily
 lane until the separately bounded no-cookie enrichment canary is reviewed.
+
+Preview that additive lane only after selecting and reviewing an Actor's input
+and output contract:
+
+```bash
+npm run bootstrap:attention -- --dry-run \
+  --linkedin-enrichment=apify \
+  --linkedin-apify-actor-id=reviewed-owner~reviewed-actor \
+  --linkedin-apify-input-field=postUrls
+```
+
+The preview performs no network call and reads no token. It fixes the maximum
+batch at five shortlisted post URLs, one paid dataset item per request, $0.25
+maximum per request, and $1.25 maximum for the run. A confirmed bootstrap also
+requires `--confirm-worker-provider-secrets-configured`; deploying code or
+having an Apify account does not approve provider spend or the canary.

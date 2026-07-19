@@ -1,4 +1,4 @@
-import { fetchDiscoveryEntries } from './ingest/discovery.js';
+import { fetchDiscoveryEntries, isActionableLinkedInUrl } from './ingest/discovery.js';
 import { entryPayload, parseFeed, sourceItemHash } from './ingest/rss.js';
 import type { SignalRepository } from './repository.js';
 import { scoreEntry } from './scoring.js';
@@ -158,8 +158,13 @@ async function fetchSource(
     if (source.etag) headers['If-None-Match'] = source.etag;
     if (source.lastModified) headers['If-Modified-Since'] = source.lastModified;
 
-    const fetched = await fetchSourceEntries(source, fetchFn, headers, controller.signal);
-    clearTimeout(timeout);
+    let fetched: Awaited<ReturnType<typeof fetchSourceEntries>>;
+    try {
+      const queryOverride = await enrichmentQueries(repo, source);
+      fetched = await fetchSourceEntries(source, fetchFn, headers, controller.signal, queryOverride);
+    } finally {
+      clearTimeout(timeout);
+    }
     httpStatus = fetched.httpStatus;
 
     if (fetched.notModified) {
@@ -209,6 +214,7 @@ async function fetchSource(
             sourceId: source.id,
             sourceName: source.name,
             model: 'heuristic-v1',
+            ...(source.metadata.mode === 'enrichment' ? { observationMode: 'enrichment' } : {}),
           },
         });
       }
@@ -255,6 +261,7 @@ async function fetchSourceEntries(
   fetchFn: typeof fetch,
   headers: Record<string, string>,
   signal: AbortSignal,
+  queryOverride?: string[],
 ): Promise<{
   entries: ReturnType<typeof parseFeed>;
   httpStatus: number | null;
@@ -262,8 +269,11 @@ async function fetchSourceEntries(
   etag: string | null;
   lastModified: string | null;
 }> {
-  if (source.sourceType === 'web' && source.metadata.mode === 'discovery') {
-    const discovered = await fetchDiscoveryEntries(source, fetchFn, signal);
+  if (
+    source.sourceType === 'web'
+    && (source.metadata.mode === 'discovery' || source.metadata.mode === 'enrichment')
+  ) {
+    const discovered = await fetchDiscoveryEntries(source, fetchFn, signal, queryOverride);
     return {
       entries: discovered.entries,
       httpStatus: discovered.httpStatus,
@@ -294,6 +304,32 @@ async function fetchSourceEntries(
     etag,
     lastModified,
   };
+}
+
+async function enrichmentQueries(repo: SignalRepository, source: SignalSource): Promise<string[] | undefined> {
+  if (source.metadata.mode !== 'enrichment' || source.metadata.provider !== 'apify') return undefined;
+  const statuses = Array.isArray(source.metadata.upstream_statuses)
+    ? source.metadata.upstream_statuses.filter((status): status is string => typeof status === 'string' && status.trim().length > 0)
+    : ['published', 'approved', 'ready_for_review'];
+  const minimumScore = typeof source.metadata.upstream_min_score === 'number'
+    ? Math.max(0, Math.min(1, source.metadata.upstream_min_score))
+    : 0.65;
+  const refreshHours = typeof source.metadata.reenrich_after_hours === 'number'
+    ? Math.max(1, source.metadata.reenrich_after_hours)
+    : 24;
+  const cutoff = Date.now() - refreshHours * 3_600_000;
+  const signals = await repo.listSignals({
+    tenantId: source.tenantId,
+    statuses,
+    limit: Math.min(100, Math.max(source.maxItemsPerFetch * 5, source.maxItemsPerFetch)),
+  });
+  return signals
+    .filter((signal) => signal.source.provider !== 'apify')
+    .filter((signal) => signal.score >= minimumScore && isActionableLinkedInUrl(signal.url))
+    .filter((signal) => !signal.conversation || Date.parse(signal.conversation.observedAt) <= cutoff)
+    .map((signal) => signal.url)
+    .filter((url, index, urls) => urls.indexOf(url) === index)
+    .slice(0, source.maxItemsPerFetch);
 }
 
 async function recordSuccess(

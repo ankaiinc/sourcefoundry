@@ -1,5 +1,5 @@
 import { sha256 } from '../hash.js';
-import type { JsonRecord, SignalSource, SourceEntry } from '../types.js';
+import type { JsonRecord, SignalConversation, SignalConversationParticipant, SignalSource, SourceEntry } from '../types.js';
 import { canonicalizeUrl } from '../url.js';
 
 type DiscoveryProvider = 'firecrawl' | 'tavily' | 'x' | 'youtube' | 'youtube-comments' | 'apify' | 'generic';
@@ -10,6 +10,7 @@ type DiscoveryItem = {
   summary: string;
   author: string;
   publishedAt: string | null;
+  conversation?: SignalConversation;
   raw: JsonRecord;
 };
 
@@ -22,13 +23,15 @@ export async function fetchDiscoveryEntries(
   source: SignalSource,
   fetchFn: typeof fetch,
   signal: AbortSignal,
+  queryOverride?: string[],
 ): Promise<DiscoveryFetchResult> {
-  const queries = discoveryQueries(source);
+  const provider = discoveryProvider(source.metadata.provider);
+  const queries = queryOverride ?? discoveryQueries(source);
   if (queries.length === 0) {
+    if (queryOverride !== undefined) return { entries: [], httpStatus: null };
     throw new Error(`Discovery source ${source.id} has no metadata.queries`);
   }
-
-  const provider = discoveryProvider(source.metadata.provider);
+  if (provider === 'apify') validateApifyRun(source, queries);
   const limit = positiveInt(source.metadata.max_results_per_query, 5);
   const entries: SourceEntry[] = [];
   let httpStatus: number | null = null;
@@ -57,9 +60,18 @@ export async function fetchDiscoveryEntries(
 }
 
 function requestUrl(source: SignalSource, query: string, limit: number): string {
-  if (requestMethod(source) !== 'GET') return source.url;
   const url = new URL(source.url);
   const provider = discoveryProvider(source.metadata.provider);
+  if (provider === 'apify') {
+    url.searchParams.delete('token');
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('clean', '1');
+    url.searchParams.set('maxItems', String(limit));
+    url.searchParams.set('maxTotalChargeUsd', String(requiredPositiveNumber(source.metadata.max_total_charge_usd, 'max_total_charge_usd')));
+    url.searchParams.set('timeout', String(apifyTimeoutSeconds(source)));
+    return url.toString();
+  }
+  if (requestMethod(source) !== 'GET') return source.url;
   if (provider === 'x') {
     url.searchParams.set('query', query);
     url.searchParams.set('max_results', String(Math.min(100, Math.max(10, limit))));
@@ -187,6 +199,9 @@ function requestBody(
   if (provider === 'apify') {
     if (!discoveryToken(source)) throw new Error('Apify discovery source is missing APIFY_API_TOKEN');
     const template = objectValue(source.metadata.request_template);
+    if (Object.keys(template).length === 0) {
+      throw new Error('Apify enrichment source requires metadata.request_template');
+    }
     const replace = (value: unknown): unknown => {
       if (value === '$query') return query;
       if (value === '$limit') return limit;
@@ -196,9 +211,7 @@ function requestBody(
       }
       return value;
     };
-    return JSON.stringify(Object.keys(template).length > 0
-      ? replace(template)
-      : { searchQueries: [query], maxItems: limit });
+    return JSON.stringify(replace(template));
   }
 
   return JSON.stringify({ query, limit });
@@ -208,6 +221,7 @@ function normalizeDiscoveryItems(body: unknown, provider: DiscoveryProvider): Di
   if (provider === 'x') return normalizeXItems(body);
   if (provider === 'youtube') return normalizeYouTubeItems(body);
   if (provider === 'youtube-comments') return normalizeYouTubeCommentItems(body);
+  if (provider === 'apify') return normalizeApifyItems(body);
   const records = candidateArrays(body)
     .find((items) => items.length > 0) ?? [];
 
@@ -311,6 +325,113 @@ function normalizeYouTubeCommentItems(body: unknown): DiscoveryItem[] {
   });
 }
 
+function normalizeApifyItems(body: unknown): DiscoveryItem[] {
+  const records = candidateArrays(body).find((items) => items.length > 0) ?? [];
+  const observedAt = new Date().toISOString();
+  return records.flatMap((value) => {
+    const item = objectValue(value);
+    const author = objectValue(item.author);
+    const text = cleanText(firstString(
+      item.text,
+      item.postText,
+      item.post_text,
+      item.headline,
+      item.content,
+      item.commentary,
+      item.description,
+    ));
+    const displayAuthor = cleanText(firstString(
+      item.authorFullName,
+      item.authorName,
+      item.profileName,
+      item.companyName,
+      author.name,
+      author.fullName,
+    ));
+    const url = firstString(item.postUrl, item.url, item.linkedinUrl, item.link);
+    if (!url || !text) return [];
+
+    const rawComments = firstArray(
+      item.comments,
+      objectValue(item.comments).items,
+      item.topComments,
+      item.commentSnippets,
+    );
+    const participants = dedupeParticipants(rawComments
+      .flatMap((comment): SignalConversationParticipant[] => {
+        const record = objectValue(comment);
+        const commentAuthor = objectValue(record.author);
+        const displayName = cleanText(firstString(
+          record.authorName,
+          record.authorFullName,
+          record.profileName,
+          commentAuthor.name,
+          commentAuthor.fullName,
+        ));
+        const excerpt = cleanText(firstString(record.text, record.commentText, record.content, record.commentary));
+        if (!displayName || !excerpt) return [];
+        return [{
+          displayName,
+          handle: nullableString(firstString(
+            record.authorHandle,
+            record.username,
+            commentAuthor.publicIdentifier,
+            commentAuthor.username,
+          )),
+          profileUrl: nullableLinkedInUrl(firstString(
+            record.authorProfileUrl,
+            record.profileUrl,
+            commentAuthor.profileUrl,
+            commentAuthor.linkedinUrl,
+          )),
+          commentUrl: nullableLinkedInUrl(firstString(record.commentUrl, record.permalink, record.url)),
+          excerpt: excerpt.slice(0, 500),
+          publishedAt: parseDateFrom(record.publishedAt, record.postedAt, record.createdAt, record.timestamp),
+        }];
+      }))
+      .slice(0, 10);
+    const commentsTotal = firstNonnegativeInt(
+      item.numComments,
+      item.commentCount,
+      item.num_comments,
+      objectValue(item.stats).comments,
+      objectValue(item.engagement).comments,
+    );
+    const normalizedCommentsTotal = commentsTotal === null ? null : Math.max(commentsTotal, rawComments.length);
+    const explicitPartial = firstBoolean(
+      item.commentsTruncated,
+      item.comments_truncated,
+      item.isPartial,
+      item.partial,
+    );
+
+    return [{
+      title: text.slice(0, 180),
+      url,
+      summary: text,
+      author: displayAuthor,
+      publishedAt: parseDateFrom(
+        item.postedAtISO,
+        item.postedAt,
+        item.postedAtTimestamp,
+        item.timestamp,
+        item.datePublished,
+        item.date_posted,
+        item.createdAt,
+      ),
+      conversation: {
+        provider: 'apify',
+        observedAt,
+        commentsReturned: rawComments.length,
+        commentsTotal: normalizedCommentsTotal,
+        partial: explicitPartial ?? (normalizedCommentsTotal !== null && rawComments.length < normalizedCommentsTotal),
+        participants,
+      },
+      raw: item,
+    }];
+  });
+}
+
 function candidateArrays(body: unknown): Record<string, unknown>[][] {
   if (Array.isArray(body)) return [body as Record<string, unknown>[]];
   if (!body || typeof body !== 'object') return [];
@@ -326,6 +447,7 @@ function sourceEntryFromDiscoveryItem(
   provider: DiscoveryProvider,
 ): SourceEntry | null {
   if (!item.title || !item.url) return null;
+  if (provider === 'apify' && (!isActionableLinkedInUrl(item.url) || !sameLinkedInPost(query, item.url))) return null;
   const canonicalUrl = canonicalizeUrl(item.url);
   return {
     title: cleanText(item.title),
@@ -334,12 +456,14 @@ function sourceEntryFromDiscoveryItem(
     summary: cleanText(item.summary),
     author: cleanText(item.author),
     publishedAt: item.publishedAt,
+    ...(item.conversation ? { conversation: item.conversation } : {}),
     raw: {
       provider,
+      ...(provider === 'apify' ? { observationMode: 'enrichment' } : {}),
       query,
       sourceUrl: source.url,
       rawHash: sha256(JSON.stringify(item.raw)),
-      raw: item.raw,
+      ...(provider === 'apify' ? {} : { raw: item.raw }),
     },
   };
 }
@@ -376,10 +500,180 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
+function firstArray(...values: unknown[]): unknown[] {
+  return values.find(Array.isArray) ?? [];
+}
+
+function firstBoolean(...values: unknown[]): boolean | null {
+  for (const value of values) if (typeof value === 'boolean') return value;
+  return null;
+}
+
+function firstNonnegativeInt(...values: unknown[]): number | null {
+  for (const value of values) {
+    const number = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+    if (Number.isFinite(number) && number >= 0) return Math.floor(number);
+  }
+  return null;
+}
+
+function nullableString(value: string): string | null {
+  return value || null;
+}
+
+function nullableLinkedInUrl(value: string): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    return url.protocol === 'https:'
+      && !url.username
+      && !url.password
+      && (host === 'linkedin.com' || host.endsWith('.linkedin.com'))
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function dedupeParticipants(participants: SignalConversationParticipant[]): SignalConversationParticipant[] {
+  const seen = new Set<string>();
+  return participants.filter((participant) => {
+    const key = (participant.handle || participant.profileUrl || participant.displayName).toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function isActionableLinkedInUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (url.protocol !== 'https:' || (host !== 'linkedin.com' && !host.endsWith('.linkedin.com'))) return false;
+    let path = url.pathname;
+    try { path = decodeURIComponent(path); } catch { return false; }
+    return /^\/posts\/[^/]+/i.test(path)
+      || /^\/feed\/update\/urn:li:(?:activity|share):\d+/i.test(path)
+      || /^\/pulse\/[^/]+/i.test(path);
+  } catch {
+    return false;
+  }
+}
+
+function linkedInPostIdentity(value: string): string {
+  try {
+    const url = new URL(value);
+    const decoded = decodeURIComponent(`${url.pathname}${url.search}`);
+    return decoded.match(/(?:activity|share)[-:](\d{6,})/i)?.[1] ?? canonicalizeUrl(value);
+  } catch {
+    return '';
+  }
+}
+
+function sameLinkedInPost(expected: string, observed: string): boolean {
+  const left = linkedInPostIdentity(expected);
+  const right = linkedInPostIdentity(observed);
+  return Boolean(left && right && left === right);
+}
+
+function requiredPositiveNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`Apify enrichment source requires positive metadata.${field}`);
+  }
+  return value;
+}
+
+function templateContains(value: unknown, expected: string): boolean {
+  if (value === expected) return true;
+  if (Array.isArray(value)) return value.some((child) => templateContains(child, expected));
+  if (value && typeof value === 'object') return Object.values(value as JsonRecord).some((child) => templateContains(child, expected));
+  return false;
+}
+
+function templateContainsCredential(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(templateContainsCredential);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value as JsonRecord).some(([key, child]) => {
+    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return normalized.includes('cookie')
+      || normalized === 'liat'
+      || normalized.includes('sessiontoken')
+      || templateContainsCredential(child);
+  });
+}
+
+function apifyTimeoutSeconds(source: SignalSource): number {
+  const requested = typeof source.metadata.actor_timeout_seconds === 'number'
+    ? source.metadata.actor_timeout_seconds
+    : Math.max(1, source.timeoutSeconds - 5);
+  return Math.max(1, Math.min(300, Math.floor(requested), Math.max(1, source.timeoutSeconds - 1)));
+}
+
+function validateApifyRun(source: SignalSource, queries: string[]): void {
+  validateDiscoverySourceConfiguration(source);
+  if (!queries.every(isActionableLinkedInUrl)) {
+    throw new Error('Apify enrichment accepts only concrete public LinkedIn post URLs');
+  }
+  const perRequest = requiredPositiveNumber(source.metadata.max_total_charge_usd, 'max_total_charge_usd');
+  const perRun = requiredPositiveNumber(source.metadata.max_run_charge_usd, 'max_run_charge_usd');
+  if (perRequest * queries.length > perRun + Number.EPSILON) {
+    throw new Error('Apify enrichment charge caps exceed the bounded per-request or whole-run policy');
+  }
+}
+
+export function validateDiscoverySourceConfiguration(source: SignalSource): void {
+  if (source.metadata.provider !== 'apify') return;
+  let endpoint: URL;
+  try {
+    endpoint = new URL(source.url);
+  } catch {
+    throw new Error('Apify enrichment source URL is invalid');
+  }
+  if (
+    endpoint.protocol !== 'https:'
+    || endpoint.hostname !== 'api.apify.com'
+    || endpoint.username
+    || endpoint.password
+    || endpoint.searchParams.has('token')
+    || !/^\/v2\/(?:acts|actors)\/[^/]+\/run-sync-get-dataset-items\/?$/.test(endpoint.pathname)
+  ) {
+    throw new Error('Apify token may be sent only to the HTTPS synchronous Actor dataset endpoint without URL credentials');
+  }
+  const template = objectValue(source.metadata.request_template);
+  if (Object.keys(template).length === 0 || !templateContains(template, '$query')) {
+    throw new Error('Apify enrichment source requires metadata.request_template containing $query');
+  }
+  if (templateContainsCredential(template)) {
+    throw new Error('Apify enrichment request_template must not contain cookies or LinkedIn session credentials');
+  }
+  const perRequest = requiredPositiveNumber(source.metadata.max_total_charge_usd, 'max_total_charge_usd');
+  const perRun = requiredPositiveNumber(source.metadata.max_run_charge_usd, 'max_run_charge_usd');
+  if (perRequest > 2 || perRun > 10) {
+    throw new Error('Apify enrichment charge caps exceed the bounded per-request or whole-run policy');
+  }
+}
+
 function parseDate(input: string): string | null {
   if (!input) return null;
   const timestamp = Date.parse(input);
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function parseDateFrom(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = parseDate(value);
+      if (parsed) return parsed;
+    }
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      const milliseconds = value < 10_000_000_000 ? value * 1000 : value;
+      const date = new Date(milliseconds);
+      if (Number.isFinite(date.getTime())) return date.toISOString();
+    }
+  }
+  return null;
 }
 
 function positiveInt(value: unknown, fallback: number): number {

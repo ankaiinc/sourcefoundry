@@ -263,4 +263,92 @@ describe('signal pipeline', () => {
       }
     }
   });
+
+  it('shortlists existing LinkedIn signals for bounded enrichment and does not re-charge fresh evidence', async () => {
+    const previousToken = process.env.APIFY_API_TOKEN;
+    process.env.APIFY_API_TOKEN = 'apify-test-token';
+    try {
+      const repo = new MemorySignalRepository();
+      const tenant = await repo.upsertTenant({ slug: 'attention', name: 'Attention OS' });
+      const discovery = await repo.createSource({
+        tenantId: tenant.id,
+        name: 'LinkedIn search',
+        sourceType: 'web',
+        url: 'https://discovery.example.test/search',
+        reliability: 0.9,
+        metadata: {
+          mode: 'discovery', provider: 'firecrawl', queries: ['AI agent reliability'],
+          max_results_per_query: 1, relevance_terms: ['ai', 'agent', 'reliability'],
+        },
+      });
+      const postUrl = 'https://www.linkedin.com/posts/operator_activity-1234567890';
+      await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: discovery.id });
+      await drainOnce(repo, {
+        maxAttempts: 5,
+        fetchFn: async () => new Response(JSON.stringify({ data: [{
+          title: 'AI agent reliability in production',
+          url: postUrl,
+          description: 'A field note about AI agent reliability, product judgment, evidence, and human approval.',
+          publishedAt: new Date().toISOString(),
+        }] })),
+      });
+
+      const enrichment = await repo.createSource({
+        tenantId: tenant.id,
+        name: 'LinkedIn post enrichment',
+        sourceType: 'web',
+        url: 'https://api.apify.com/v2/acts/reviewed~linkedin-posts/run-sync-get-dataset-items',
+        reliability: 0.68,
+        maxItemsPerFetch: 5,
+        timeoutSeconds: 90,
+        metadata: {
+          mode: 'enrichment', provider: 'apify', max_results_per_query: 1,
+          upstream_statuses: ['published', 'ready_for_review'], upstream_min_score: 0.65,
+          reenrich_after_hours: 24, max_total_charge_usd: 0.25, max_run_charge_usd: 1.25,
+          actor_timeout_seconds: 60,
+          request_template: { postUrls: ['$query'] },
+          relevance_terms: ['ai', 'agent', 'reliability'],
+        },
+      });
+      let enrichmentCalls = 0;
+      const enrichFetch = async (_url: string | URL | Request, init?: RequestInit) => {
+        enrichmentCalls++;
+        expect(JSON.parse(String(init?.body))).toEqual({ postUrls: [postUrl] });
+        return new Response(JSON.stringify([{
+          postUrl,
+          text: 'AI agent reliability in production requires explicit failure evidence and human approval.',
+          authorFullName: 'Operator Founder',
+          postedAtISO: new Date().toISOString(),
+          numComments: 8,
+          commentsTruncated: true,
+          comments: [{ text: 'Measure the recovery path too.', authorName: 'Product Leader' }],
+        }]));
+      };
+      await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: enrichment.id });
+      const enriched = await drainOnce(repo, { maxAttempts: 5, fetchFn: enrichFetch });
+      expect(enriched).toMatchObject({ itemsProcessed: 0, detail: { itemsSeen: 1, itemsInserted: 0 } });
+      expect(repo.items.size).toBe(1);
+      const signals = await repo.listSignals({ tenantId: tenant.id, statuses: ['published', 'ready_for_review'], limit: 10 });
+      expect(signals[0]).toMatchObject({
+        source: { provider: 'firecrawl' },
+        provenance: { author: 'Operator Founder' },
+        conversation: {
+          provider: 'apify', commentsReturned: 1, commentsTotal: 8, partial: true,
+          participants: [{ displayName: 'Product Leader', excerpt: 'Measure the recovery path too.' }],
+        },
+        completeness: { author: true, publishedAt: true },
+      });
+
+      await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: enrichment.id });
+      const freshReplay = await drainOnce(repo, {
+        maxAttempts: 5,
+        fetchFn: (() => { throw new Error('fresh enrichment must not call the paid provider'); }) as typeof fetch,
+      });
+      expect(freshReplay).toMatchObject({ itemsProcessed: 0, detail: { itemsSeen: 0, itemsInserted: 0 } });
+      expect(enrichmentCalls).toBe(1);
+    } finally {
+      if (previousToken === undefined) delete process.env.APIFY_API_TOKEN;
+      else process.env.APIFY_API_TOKEN = previousToken;
+    }
+  });
 });

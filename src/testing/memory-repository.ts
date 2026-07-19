@@ -13,6 +13,7 @@ import type {
   SourceItemInput,
 } from '../types.js';
 import { aggregatePublicSignals, signalKeyFor } from '../signals.js';
+import { conversationFromPayload } from '../conversation.js';
 
 interface MemoryJob extends SignalJob {
   status: 'queued' | 'running' | 'completed' | 'failed';
@@ -62,11 +63,23 @@ export class MemorySignalRepository implements SignalRepository {
     reliability?: number;
     intervalMinutes?: number;
     maxItemsPerFetch?: number;
+    timeoutSeconds?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource> {
     for (const source of this.sources.values()) {
       if (source.tenantId === input.tenantId && source.url === input.url) {
-        return source;
+        const updated: SignalSource = {
+          ...source,
+          name: input.name,
+          sourceType: input.sourceType,
+          reliability: input.reliability ?? 0.7,
+          intervalMinutes: input.intervalMinutes ?? 60,
+          maxItemsPerFetch: input.maxItemsPerFetch ?? 30,
+          timeoutSeconds: input.timeoutSeconds ?? 20,
+          metadata: input.metadata ?? {},
+        };
+        this.sources.set(updated.id, updated);
+        return updated;
       }
     }
     const source: SignalSource = {
@@ -79,7 +92,7 @@ export class MemorySignalRepository implements SignalRepository {
       reliability: input.reliability ?? 0.7,
       intervalMinutes: input.intervalMinutes ?? 60,
       maxItemsPerFetch: input.maxItemsPerFetch ?? 30,
-      timeoutSeconds: 20,
+      timeoutSeconds: input.timeoutSeconds ?? 20,
       etag: null,
       lastModified: null,
       failureCount: 0,
@@ -220,7 +233,25 @@ export class MemorySignalRepository implements SignalRepository {
   async upsertSourceItem(input: SourceItemInput): Promise<{ item: SourceItem; inserted: boolean }> {
     const key = `${input.tenantId}:${input.canonicalUrl}`;
     const existing = this.items.get(key);
-    if (existing) return { item: existing, inserted: false };
+    if (existing) {
+      if (objectValue(objectValue(input.rawPayload).raw).observationMode === 'enrichment') {
+        const richerContent = input.title.length + input.summary.length > existing.title.length + existing.summary.length;
+        const merged: SourceItem = {
+          ...existing,
+          title: richerContent ? input.title : existing.title,
+          summary: richerContent ? input.summary : existing.summary,
+          author: existing.author || input.author,
+          publishedAt: existing.publishedAt ?? input.publishedAt,
+          contentHash: richerContent ? input.contentHash : existing.contentHash,
+          rawPayload: { ...existing.rawPayload, enrichment: input.rawPayload },
+          relevanceScore: Math.max(existing.relevanceScore, input.relevanceScore),
+          sourceReliability: Math.max(existing.sourceReliability, input.sourceReliability),
+        };
+        this.items.set(key, merged);
+        return { item: merged, inserted: false };
+      }
+      return { item: existing, inserted: false };
+    }
 
     const item: SourceItem = {
       ...input,
@@ -233,7 +264,6 @@ export class MemorySignalRepository implements SignalRepository {
 
   async upsertCandidate(input: CandidateInput): Promise<void> {
     const key = `${input.tenantId}:${input.sourceItemId}`;
-    if (this.candidates.has(key)) return;
     const item = Array.from(this.items.values()).find((candidate) => candidate.id === input.sourceItemId);
     if (!item) throw new Error(`source item not found: ${input.sourceItemId}`);
     const source = this.sources.get(item.sourceId);
@@ -244,6 +274,39 @@ export class MemorySignalRepository implements SignalRepository {
       ? item.rawPayload.raw as JsonRecord
       : {};
     const query = typeof rawDiscovery.query === 'string' ? rawDiscovery.query : null;
+    const existing = this.candidates.get(key);
+    if (existing) {
+      if (input.metadata.observationMode !== 'enrichment') return;
+      const richerContent = input.title.length + input.summary.length > existing.title.length + existing.summary.length;
+      const updated: PublicSignal = {
+        ...existing,
+        title: richerContent ? input.title : existing.title,
+        summary: richerContent ? input.summary : existing.summary,
+        url: input.url,
+        score: Math.max(existing.score, input.score),
+        tags: [...new Set([...existing.tags, ...input.tags])],
+        publishedAt: item.publishedAt,
+        provenance: {
+          ...existing.provenance,
+          author: item.author || existing.provenance.author,
+          contentHash: item.contentHash,
+        },
+        freshness: {
+          ...existing.freshness,
+          publishedAt: item.publishedAt,
+          ageSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(item.publishedAt ?? item.createdAt)) / 1000)),
+        },
+        completeness: {
+          title: item.title.trim().length > 0,
+          summary: item.summary.trim().length > 0,
+          author: item.author.trim().length > 0,
+          publishedAt: item.publishedAt !== null,
+        },
+        ...conversationField(item.rawPayload),
+      };
+      this.candidates.set(key, updated);
+      return;
+    }
     const signal = {
       schemaVersion: 1,
       id: this.id('candidate'),
@@ -271,6 +334,7 @@ export class MemorySignalRepository implements SignalRepository {
         author: item.author || null,
         query,
       },
+      ...conversationField(item.rawPayload),
       freshness: {
         publishedAt: item.publishedAt,
         fetchedAt: item.createdAt,
@@ -330,4 +394,13 @@ export class MemorySignalRepository implements SignalRepository {
     this.sequence += 1;
     return `${prefix}_${this.sequence}`;
   }
+}
+
+function objectValue(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function conversationField(rawPayload: JsonRecord): { conversation?: NonNullable<PublicSignal['conversation']> } {
+  const conversation = conversationFromPayload(rawPayload);
+  return conversation ? { conversation } : {};
 }

@@ -134,6 +134,7 @@ export function entryPayload(entry: SourceEntry): JsonRecord {
     summary: entry.summary,
     author: entry.author,
     publishedAt: entry.publishedAt,
+    ...(entry.conversation ? { conversation: entry.conversation } : {}),
     raw: entry.raw,
   };
 }

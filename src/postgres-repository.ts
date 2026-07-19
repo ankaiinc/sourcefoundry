@@ -14,6 +14,7 @@ import type {
 } from './types.js';
 import { objectValue, toJob, toSource, toTenant, type SignalRepository } from './repository.js';
 import { aggregatePublicSignals, signalKeyFor } from './signals.js';
+import { conversationFromPayload } from './conversation.js';
 
 const { Pool } = pg;
 
@@ -54,15 +55,16 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     reliability?: number;
     intervalMinutes?: number;
     maxItemsPerFetch?: number;
+    timeoutSeconds?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource> {
     const result = await this.pool.query(
       `
       INSERT INTO sourcefoundry_sources (
         tenant_id, name, source_type, url, reliability, interval_minutes,
-        max_items_per_fetch, metadata
+        max_items_per_fetch, timeout_seconds, metadata
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (tenant_id, url)
       DO UPDATE SET
         name = EXCLUDED.name,
@@ -70,6 +72,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
         reliability = EXCLUDED.reliability,
         interval_minutes = EXCLUDED.interval_minutes,
         max_items_per_fetch = EXCLUDED.max_items_per_fetch,
+        timeout_seconds = EXCLUDED.timeout_seconds,
         metadata = EXCLUDED.metadata,
         updated_at = now()
       RETURNING *
@@ -82,6 +85,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
         input.reliability ?? 0.7,
         input.intervalMinutes ?? 60,
         input.maxItemsPerFetch ?? 30,
+        input.timeoutSeconds ?? 20,
         input.metadata ?? {},
       ],
     );
@@ -297,8 +301,30 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
         published_at, content_hash, raw_payload, relevance_score, source_reliability
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      ON CONFLICT (tenant_id, canonical_url) DO NOTHING
-      RETURNING *
+      ON CONFLICT (tenant_id, canonical_url) DO UPDATE SET
+        title = CASE
+          WHEN length(EXCLUDED.title) + length(EXCLUDED.summary) > length(sourcefoundry_source_items.title) + length(sourcefoundry_source_items.summary) THEN EXCLUDED.title
+          ELSE sourcefoundry_source_items.title
+        END,
+        summary = CASE
+          WHEN length(EXCLUDED.title) + length(EXCLUDED.summary) > length(sourcefoundry_source_items.title) + length(sourcefoundry_source_items.summary) THEN EXCLUDED.summary
+          ELSE sourcefoundry_source_items.summary
+        END,
+        author = CASE
+          WHEN sourcefoundry_source_items.author = '' AND EXCLUDED.author <> '' THEN EXCLUDED.author
+          ELSE sourcefoundry_source_items.author
+        END,
+        published_at = COALESCE(sourcefoundry_source_items.published_at, EXCLUDED.published_at),
+        content_hash = CASE
+          WHEN length(EXCLUDED.title) + length(EXCLUDED.summary) > length(sourcefoundry_source_items.title) + length(sourcefoundry_source_items.summary) THEN EXCLUDED.content_hash
+          ELSE sourcefoundry_source_items.content_hash
+        END,
+        raw_payload = sourcefoundry_source_items.raw_payload || jsonb_build_object('enrichment', EXCLUDED.raw_payload),
+        relevance_score = GREATEST(sourcefoundry_source_items.relevance_score, EXCLUDED.relevance_score),
+        source_reliability = GREATEST(sourcefoundry_source_items.source_reliability, EXCLUDED.source_reliability),
+        updated_at = now()
+      WHERE EXCLUDED.raw_payload->'raw'->>'observationMode' = 'enrichment'
+      RETURNING *, (xmax = 0) AS was_inserted
       `,
       [
         input.tenantId,
@@ -317,7 +343,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     );
 
     if (result.rows[0]) {
-      return { item: toItem(result.rows[0], input), inserted: true };
+      return { item: toItem(result.rows[0], input), inserted: Boolean(result.rows[0].was_inserted) };
     }
 
     const existing = await this.pool.query(
@@ -339,7 +365,21 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
         tenant_id, source_item_id, title, summary, url, status, score, tags, metadata
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (tenant_id, source_item_id) DO NOTHING
+      ON CONFLICT (tenant_id, source_item_id) DO UPDATE SET
+        title = CASE
+          WHEN length(EXCLUDED.title) + length(EXCLUDED.summary) > length(sourcefoundry_candidates.title) + length(sourcefoundry_candidates.summary) THEN EXCLUDED.title
+          ELSE sourcefoundry_candidates.title
+        END,
+        summary = CASE
+          WHEN length(EXCLUDED.title) + length(EXCLUDED.summary) > length(sourcefoundry_candidates.title) + length(sourcefoundry_candidates.summary) THEN EXCLUDED.summary
+          ELSE sourcefoundry_candidates.summary
+        END,
+        url = EXCLUDED.url,
+        score = GREATEST(sourcefoundry_candidates.score, EXCLUDED.score),
+        tags = ARRAY(SELECT DISTINCT unnest(sourcefoundry_candidates.tags || EXCLUDED.tags)),
+        metadata = sourcefoundry_candidates.metadata || EXCLUDED.metadata,
+        updated_at = now()
+      WHERE EXCLUDED.metadata->>'observationMode' = 'enrichment'
       `,
       [
         input.tenantId,
@@ -429,6 +469,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
           author: author || null,
           query: typeof rawDiscovery.query === 'string' && rawDiscovery.query.trim() ? rawDiscovery.query : null,
         },
+        ...conversationField(rawPayload),
         freshness: {
           publishedAt: itemPublishedAt,
           fetchedAt,
@@ -482,6 +523,11 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
   }
 }
 
+function conversationField(rawPayload: JsonRecord): { conversation?: NonNullable<PublicSignal['conversation']> } {
+  const conversation = conversationFromPayload(rawPayload);
+  return conversation ? { conversation } : {};
+}
+
 function requiredRow<T>(rows: T[], name: string): T {
   const row = rows[0];
   if (!row) throw new Error(`Expected ${name} row`);
@@ -502,9 +548,19 @@ function requiredTimestamp(value: unknown, field: string): string {
 
 function toItem(row: Record<string, unknown>, fallback: SourceItemInput): SourceItem {
   return {
-    ...fallback,
     id: String(row.id),
-    createdAt: String(row.created_at ?? new Date().toISOString()),
-    rawPayload: objectValue(row.raw_payload) || fallback.rawPayload,
+    tenantId: String(row.tenant_id ?? fallback.tenantId),
+    sourceId: String(row.source_id ?? fallback.sourceId),
+    canonicalUrl: String(row.canonical_url ?? fallback.canonicalUrl),
+    url: String(row.url ?? fallback.url),
+    title: String(row.title ?? fallback.title),
+    summary: String(row.summary ?? fallback.summary),
+    author: String(row.author ?? fallback.author),
+    publishedAt: optionalTimestamp(row.published_at) ?? fallback.publishedAt,
+    contentHash: String(row.content_hash ?? fallback.contentHash),
+    rawPayload: objectValue(row.raw_payload),
+    relevanceScore: Number(row.relevance_score ?? fallback.relevanceScore),
+    sourceReliability: Number(row.source_reliability ?? fallback.sourceReliability),
+    createdAt: optionalTimestamp(row.created_at) ?? new Date().toISOString(),
   };
 }

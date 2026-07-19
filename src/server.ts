@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { loadConfig } from './config.js';
 import { PostgresSourceFoundryRepository } from './postgres-repository.js';
+import { validateDiscoverySourceConfiguration } from './ingest/discovery.js';
 
 const config = loadConfig();
 const repo = new PostgresSourceFoundryRepository(config.databaseUrl);
@@ -40,6 +41,22 @@ const server = http.createServer(async (req, res) => {
       assignOptionalNumber(sourceInput, 'reliability', body.reliability);
       assignOptionalNumber(sourceInput, 'intervalMinutes', body.intervalMinutes);
       assignOptionalNumber(sourceInput, 'maxItemsPerFetch', body.maxItemsPerFetch);
+      assignOptionalNumber(sourceInput, 'timeoutSeconds', body.timeoutSeconds);
+
+      validateDiscoverySourceConfiguration({
+        id: 'pending',
+        tenantId: sourceInput.tenantId,
+        name: sourceInput.name,
+        sourceType: sourceInput.sourceType,
+        url: sourceInput.url,
+        enabled: true,
+        reliability: sourceInput.reliability ?? 0.7,
+        intervalMinutes: sourceInput.intervalMinutes ?? 60,
+        maxItemsPerFetch: sourceInput.maxItemsPerFetch ?? 30,
+        timeoutSeconds: sourceInput.timeoutSeconds ?? 20,
+        failureCount: 0,
+        metadata: sourceInput.metadata ?? {},
+      });
 
       const source = await repo.createSource(sourceInput);
       return send(res, 200, { source });

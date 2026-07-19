@@ -43,7 +43,26 @@ export interface SourceEntry {
   summary: string;
   author: string;
   publishedAt: string | null;
+  conversation?: SignalConversation;
   raw: JsonRecord;
+}
+
+export interface SignalConversationParticipant {
+  displayName: string;
+  handle: string | null;
+  profileUrl: string | null;
+  commentUrl: string | null;
+  excerpt: string;
+  publishedAt: string | null;
+}
+
+export interface SignalConversation {
+  provider: string;
+  observedAt: string;
+  commentsReturned: number;
+  commentsTotal: number | null;
+  partial: boolean;
+  participants: SignalConversationParticipant[];
 }
 
 export interface SourceItemInput {
@@ -91,6 +110,7 @@ export interface SignalObservation {
   freshness: PublicSignal['freshness'];
   completeness: PublicSignal['completeness'];
   failureState: PublicSignal['failureState'];
+  conversation?: SignalConversation;
 }
 
 export interface PublicSignal {
@@ -120,6 +140,7 @@ export interface PublicSignal {
     author: string | null;
     query: string | null;
   };
+  conversation?: SignalConversation;
   freshness: {
     publishedAt: string | null;
     fetchedAt: string;

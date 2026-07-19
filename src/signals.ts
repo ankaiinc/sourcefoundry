@@ -31,6 +31,7 @@ function observation(signal: PublicSignal): SignalObservation {
     freshness: signal.freshness,
     completeness: signal.completeness,
     failureState: signal.failureState,
+    ...(signal.conversation ? { conversation: signal.conversation } : {}),
   };
 }
 

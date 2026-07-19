@@ -22,6 +22,7 @@ export interface SignalRepository {
     reliability?: number;
     intervalMinutes?: number;
     maxItemsPerFetch?: number;
+    timeoutSeconds?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource>;
   listSources(input: { tenantSlug?: string; tenantId?: string }): Promise<SignalSource[]>;

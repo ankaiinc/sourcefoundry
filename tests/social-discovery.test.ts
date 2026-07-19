@@ -4,12 +4,15 @@ import type { SignalSource } from '../src/types.js';
 
 const originalX = process.env.X_API_BEARER_TOKEN;
 const originalYouTube = process.env.YOUTUBE_API_KEY;
+const originalApify = process.env.APIFY_API_TOKEN;
 
 afterEach(() => {
   if (originalX === undefined) delete process.env.X_API_BEARER_TOKEN;
   else process.env.X_API_BEARER_TOKEN = originalX;
   if (originalYouTube === undefined) delete process.env.YOUTUBE_API_KEY;
   else process.env.YOUTUBE_API_KEY = originalYouTube;
+  if (originalApify === undefined) delete process.env.APIFY_API_TOKEN;
+  else process.env.APIFY_API_TOKEN = originalApify;
 });
 
 function source(provider: string, url: string): SignalSource {
@@ -105,5 +108,124 @@ describe('official social discovery adapters', () => {
       author: 'Curious Operator',
       summary: 'How do you measure agent reliability?',
     });
+  });
+
+  it('enriches only concrete LinkedIn posts through a bounded token-safe Apify Actor call', async () => {
+    process.env.APIFY_API_TOKEN = 'apify-test-token';
+    const apifySource = source('apify', 'https://api.apify.com/v2/acts/reviewed~linkedin-posts/run-sync-get-dataset-items');
+    apifySource.timeoutSeconds = 90;
+    apifySource.maxItemsPerFetch = 5;
+    apifySource.metadata = {
+      mode: 'enrichment',
+      provider: 'apify',
+      max_results_per_query: 1,
+      max_total_charge_usd: 0.25,
+      max_run_charge_usd: 1.25,
+      actor_timeout_seconds: 60,
+      request_template: { postUrls: ['$query'], limitPerSource: '$limit' },
+    };
+    const postUrl = 'https://www.linkedin.com/posts/operator_activity-1234567890';
+    const calls: Array<{ url: URL; headers: Headers; body: unknown }> = [];
+    const result = await fetchDiscoveryEntries(
+      apifySource,
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          url: new URL(input.toString()),
+          headers: new Headers(init?.headers),
+          body: JSON.parse(String(init?.body)),
+        });
+        return new Response(JSON.stringify([{
+          postUrl,
+          text: 'A production field note on agent reliability and human approval.',
+          postedAtISO: '2026-07-19T11:00:00Z',
+          author: { name: 'Operator Founder', profileUrl: 'https://www.linkedin.com/in/operator-founder' },
+          numComments: 12,
+          commentsTruncated: true,
+          comments: [{
+            text: 'The missing piece is evaluation after a failed tool call.',
+            author: { name: 'Product Leader', publicIdentifier: 'product-leader', profileUrl: 'https://www.linkedin.com/in/product-leader' },
+            commentUrl: `${postUrl}?comment=1`,
+            publishedAt: '2026-07-19T12:00:00Z',
+          }],
+          privateActorDebug: 'must-not-leave-the-provider-boundary',
+        }]));
+      }) as typeof fetch,
+      new AbortController().signal,
+      [postUrl],
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url.searchParams.has('token')).toBe(false);
+    expect(calls[0]?.url.searchParams.get('maxItems')).toBe('1');
+    expect(calls[0]?.url.searchParams.get('maxTotalChargeUsd')).toBe('0.25');
+    expect(calls[0]?.url.searchParams.get('timeout')).toBe('60');
+    expect(calls[0]?.headers.get('authorization')).toBe('Bearer apify-test-token');
+    expect(calls[0]?.body).toEqual({ postUrls: [postUrl], limitPerSource: 1 });
+    expect(result.entries[0]).toMatchObject({
+      url: postUrl,
+      author: 'Operator Founder',
+      publishedAt: '2026-07-19T11:00:00.000Z',
+      conversation: {
+        provider: 'apify',
+        commentsReturned: 1,
+        commentsTotal: 12,
+        partial: true,
+        participants: [{ displayName: 'Product Leader', handle: 'product-leader' }],
+      },
+      raw: { provider: 'apify', observationMode: 'enrichment', query: postUrl },
+    });
+    expect(JSON.stringify(result.entries[0]?.raw)).not.toContain('must-not-leave-the-provider-boundary');
+  });
+
+  it('rejects unsafe Apify destinations, session credentials, and over-budget batches before fetch', async () => {
+    process.env.APIFY_API_TOKEN = 'apify-test-token';
+    const postUrl = 'https://www.linkedin.com/feed/update/urn:li:activity:1234567890';
+    const apifySource = source('apify', 'https://api.apify.com/v2/acts/reviewed~linkedin-posts/run-sync-get-dataset-items');
+    apifySource.metadata = {
+      mode: 'enrichment', provider: 'apify', max_results_per_query: 1,
+      max_total_charge_usd: 0.25, max_run_charge_usd: 0.25,
+      request_template: { postUrls: ['$query'] },
+    };
+    const neverFetch = (() => { throw new Error('fetch must not run'); }) as typeof fetch;
+
+    await expect(fetchDiscoveryEntries(
+      { ...apifySource, url: 'https://collector.invalid/run-sync-get-dataset-items' },
+      neverFetch,
+      new AbortController().signal,
+      [postUrl],
+    )).rejects.toThrow('token may be sent only');
+    await expect(fetchDiscoveryEntries(
+      { ...apifySource, metadata: { ...apifySource.metadata, request_template: { postUrls: ['$query'], liAt: 'forbidden' } } },
+      neverFetch,
+      new AbortController().signal,
+      [postUrl],
+    )).rejects.toThrow('must not contain cookies');
+    await expect(fetchDiscoveryEntries(
+      apifySource,
+      neverFetch,
+      new AbortController().signal,
+      [postUrl, 'https://www.linkedin.com/posts/operator_activity-9876543210'],
+    )).rejects.toThrow('charge caps exceed');
+  });
+
+  it('drops an Actor result that does not correspond to the shortlisted LinkedIn post', async () => {
+    process.env.APIFY_API_TOKEN = 'apify-test-token';
+    const requested = 'https://www.linkedin.com/posts/operator_activity-1234567890';
+    const sourceConfig = source('apify', 'https://api.apify.com/v2/acts/reviewed~linkedin-posts/run-sync-get-dataset-items');
+    sourceConfig.metadata = {
+      mode: 'enrichment', provider: 'apify', max_results_per_query: 1,
+      max_total_charge_usd: 0.25, max_run_charge_usd: 0.25,
+      request_template: { postUrls: ['$query'] },
+    };
+    const result = await fetchDiscoveryEntries(
+      sourceConfig,
+      (async () => new Response(JSON.stringify([{
+        postUrl: 'https://www.linkedin.com/posts/someone-else_activity-9876543210',
+        text: 'A valid-looking but unrelated post must not be attached to the requested evidence.',
+      }]))) as typeof fetch,
+      new AbortController().signal,
+      [requested],
+    );
+    expect(result.entries).toEqual([]);
   });
 });
