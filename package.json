@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "bootstrap:attention": "node scripts/bootstrap-attention-sources.mjs",
+    "backup:readiness": "node dist/src/backup-readiness.js",
     "reconcile:jobs": "node dist/src/reconcile-jobs.js",
     "test": "vitest run",
     "api": "node dist/src/server.js",

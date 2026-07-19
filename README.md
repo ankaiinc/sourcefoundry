@@ -54,6 +54,22 @@ npm run reconcile:jobs -- --apply --confirm=cancel-duplicate-active-jobs \
   --expect-duplicate-groups=<dry-run-count>
 ```
 
+Before any reconciliation apply, inspect the hosted Supabase backup contract
+through the read-only Management API. Supply `SUPABASE_ACCESS_TOKEN` through
+secret storage and `SUPABASE_PROJECT_REF` through the environment or the
+non-secret `--project-ref=` argument:
+
+```bash
+npm run build
+npm run backup:readiness -- --maximum-age-hours=36
+```
+
+The verifier issues one GET request, reports `mutationRequests: 0`, never emits
+the token or backup IDs, and exits non-zero unless it finds a completed hosted
+backup or physical restore point within the chosen freshness window. It proves
+that Supabase advertises a recoverable restore point; it does not perform or
+simulate a restore.
+
 Authenticated operational inspection is available at
 `GET /v1/sources?tenant=:slug` and `GET /v1/sources/:sourceId`. The list route
 lets consumers discover canonical source IDs after an idempotent bootstrap
