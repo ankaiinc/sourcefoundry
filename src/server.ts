@@ -45,6 +45,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { source });
     }
 
+    if (req.method === 'GET' && url.pathname === '/v1/sources') {
+      const tenantSlug = url.searchParams.get('tenant') ?? undefined;
+      const tenantId = url.searchParams.get('tenantId') ?? undefined;
+      if (!tenantSlug && !tenantId) return send(res, 400, { error: 'tenant or tenantId is required' });
+      const sources = await repo.listSources({ ...(tenantSlug ? { tenantSlug } : {}), ...(tenantId ? { tenantId } : {}) });
+      return send(res, 200, { schemaVersion: 1, sources });
+    }
+
+    const sourceMatch = url.pathname.match(/^\/v1\/sources\/([0-9a-f-]{36})$/i);
+    if (req.method === 'GET' && sourceMatch) {
+      const source = await repo.getSource(sourceMatch[1]!);
+      return source ? send(res, 200, { source }) : send(res, 404, { error: 'source not found' });
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/ingest/source') {
       const body = await readJson(req);
       const enqueueInput: Parameters<typeof repo.enqueueSourceFetch>[0] = {
@@ -53,8 +67,8 @@ const server = http.createServer(async (req, res) => {
       };
       assignOptionalNumber(enqueueInput, 'priority', body.priority);
 
-      const jobId = await repo.enqueueSourceFetch(enqueueInput);
-      return send(res, 202, { jobId });
+      const enqueueResult = await repo.enqueueSourceFetch(enqueueInput);
+      return send(res, 202, enqueueResult);
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/signals') {
@@ -73,7 +87,7 @@ const server = http.createServer(async (req, res) => {
       if (tenantId) listInput.tenantId = tenantId;
 
       const signals = await repo.listSignals(listInput);
-      return send(res, 200, { signals });
+      return send(res, 200, { schemaVersion: 1, signals });
     }
 
     return send(res, 404, { error: 'not found' });

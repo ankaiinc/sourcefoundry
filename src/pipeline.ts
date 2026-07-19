@@ -26,20 +26,22 @@ export async function scheduleDueSources(
   const now = options.now ?? new Date();
   const sources = await repo.listDueSources(options.maxDueSources, now);
   let enqueued = 0;
+  let alreadyActive = 0;
 
   for (const source of sources) {
-    await repo.enqueueSourceFetch({
+    const result = await repo.enqueueSourceFetch({
       tenantId: source.tenantId,
       sourceId: source.id,
       priority: sourcePriority(source),
       runAfter: now.toISOString(),
     });
-    enqueued++;
+    if (result.created) enqueued++;
+    else alreadyActive++;
   }
 
   return {
     itemsProcessed: enqueued,
-    detail: { dueSources: sources.length, enqueued },
+    detail: { dueSources: sources.length, enqueued, alreadyActive },
   };
 }
 

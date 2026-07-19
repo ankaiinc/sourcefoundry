@@ -13,6 +13,7 @@ import type {
   SourceItemInput,
 } from './types.js';
 import { objectValue, toJob, toSource, toTenant, type SignalRepository } from './repository.js';
+import { aggregatePublicSignals, signalKeyFor } from './signals.js';
 
 const { Pool } = pg;
 
@@ -101,6 +102,21 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     return result.rows.map(toSource);
   }
 
+  async listSources(input: { tenantSlug?: string; tenantId?: string }): Promise<SignalSource[]> {
+    const result = await this.pool.query(
+      `
+      SELECT s.*
+      FROM sourcefoundry_sources s
+      JOIN sourcefoundry_tenants t ON t.id = s.tenant_id
+      WHERE ($1::uuid IS NULL OR s.tenant_id = $1)
+        AND ($2::text IS NULL OR t.slug = $2)
+      ORDER BY s.name ASC, s.id ASC
+      `,
+      [input.tenantId ?? null, input.tenantSlug ?? null],
+    );
+    return result.rows.map(toSource);
+  }
+
   async getSource(sourceId: string): Promise<SignalSource | null> {
     const result = await this.pool.query('SELECT * FROM sourcefoundry_sources WHERE id = $1 LIMIT 1', [
       sourceId,
@@ -108,24 +124,59 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     return result.rows[0] ? toSource(result.rows[0]) : null;
   }
 
-  async enqueueSourceFetch(input: EnqueueSourceJobInput): Promise<string> {
-    const result = await this.pool.query(
-      `
-      INSERT INTO sourcefoundry_jobs (
-        tenant_id, job_type, entity_type, entity_id, priority, run_after, payload
-      )
-      VALUES ($1, 'fetch_source', 'sourcefoundry_source', $2, $3, $4, $5)
-      RETURNING id
-      `,
-      [
-        input.tenantId,
-        input.sourceId,
-        input.priority ?? 0,
-        input.runAfter ?? new Date().toISOString(),
-        { sourceId: input.sourceId },
-      ],
-    );
-    return String(requiredRow(result.rows, 'job').id);
+  async enqueueSourceFetch(
+    input: EnqueueSourceJobInput,
+  ): Promise<{ jobId: string; created: boolean }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `fetch_source:${input.tenantId}:${input.sourceId}`,
+      ]);
+
+      const existing = await client.query(
+        `
+        SELECT id
+        FROM sourcefoundry_jobs
+        WHERE tenant_id = $1
+          AND job_type = 'fetch_source'
+          AND entity_type = 'sourcefoundry_source'
+          AND entity_id = $2
+          AND status IN ('queued', 'running')
+        ORDER BY created_at ASC
+        LIMIT 1
+        `,
+        [input.tenantId, input.sourceId],
+      );
+      if (existing.rows[0]) {
+        await client.query('COMMIT');
+        return { jobId: String(existing.rows[0].id), created: false };
+      }
+
+      const inserted = await client.query(
+        `
+        INSERT INTO sourcefoundry_jobs (
+          tenant_id, job_type, entity_type, entity_id, priority, run_after, payload
+        )
+        VALUES ($1, 'fetch_source', 'sourcefoundry_source', $2, $3, $4, $5)
+        RETURNING id
+        `,
+        [
+          input.tenantId,
+          input.sourceId,
+          input.priority ?? 0,
+          input.runAfter ?? new Date().toISOString(),
+          { sourceId: input.sourceId },
+        ],
+      );
+      await client.query('COMMIT');
+      return { jobId: String(requiredRow(inserted.rows, 'job').id), created: true };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null> {
@@ -230,7 +281,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
       SET last_failure_at = now(),
           failure_count = failure_count + 1,
           next_fetch_at = $2,
-          metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('last_error', $3),
+          metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('last_error', $3::text),
           updated_at = now()
       WHERE id = $1
       `,
@@ -312,29 +363,101 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
   }): Promise<PublicSignal[]> {
     const result = await this.pool.query(
       `
-      SELECT c.*
+      SELECT
+        c.*,
+        i.id AS source_item_id,
+        i.canonical_url,
+        i.author,
+        i.published_at AS item_published_at,
+        i.fetched_at,
+        i.content_hash,
+        i.raw_payload,
+        s.id AS source_id,
+        s.name AS source_name,
+        s.source_type,
+        s.reliability AS source_reliability,
+        s.metadata AS source_metadata,
+        s.failure_count,
+        s.last_success_at,
+        s.last_failure_at
       FROM sourcefoundry_candidates c
       JOIN sourcefoundry_tenants t ON t.id = c.tenant_id
+      JOIN sourcefoundry_source_items i ON i.id = c.source_item_id
+      JOIN sourcefoundry_sources s ON s.id = i.source_id
       WHERE ($1::uuid IS NULL OR c.tenant_id = $1::uuid)
         AND ($2::text IS NULL OR t.slug = $2)
         AND c.status = ANY($3::text[])
       ORDER BY c.generated_at DESC
       LIMIT $4
       `,
-      [input.tenantId ?? null, input.tenantSlug ?? null, input.statuses, input.limit],
+      [input.tenantId ?? null, input.tenantSlug ?? null, input.statuses, Math.min(input.limit * 10, 1000)],
     );
-    return result.rows.map((row) => ({
-      id: String(row.id),
-      tenantId: String(row.tenant_id),
-      title: String(row.title),
-      summary: String(row.summary ?? ''),
-      url: String(row.url),
-      status: String(row.status),
-      score: Number(row.score ?? 0),
-      tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
-      generatedAt: String(row.generated_at),
-      publishedAt: typeof row.published_at === 'string' ? row.published_at : null,
-    }));
+    const signals = result.rows.map((row) => {
+      const sourceMetadata = objectValue(row.source_metadata);
+      const rawPayload = objectValue(row.raw_payload);
+      const rawDiscovery = objectValue(rawPayload.raw);
+      const fetchedAt = requiredTimestamp(row.fetched_at, 'fetched_at');
+      const itemPublishedAt = optionalTimestamp(row.item_published_at);
+      const author = String(row.author ?? '').trim();
+      const title = String(row.title);
+      const summary = String(row.summary ?? '');
+      const failures = Number(row.failure_count ?? 0);
+      const signal = {
+        schemaVersion: 1 as const,
+        id: String(row.id),
+        tenantId: String(row.tenant_id),
+        title,
+        summary,
+        url: String(row.url),
+        status: String(row.status),
+        score: Number(row.score ?? 0),
+        tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+        generatedAt: requiredTimestamp(row.generated_at, 'generated_at'),
+        publishedAt: itemPublishedAt,
+        source: {
+          id: String(row.source_id),
+          name: String(row.source_name),
+          type: row.source_type as PublicSignal['source']['type'],
+          provider: String(sourceMetadata.provider ?? row.source_type),
+          reliability: Number(row.source_reliability ?? 0),
+        },
+        provenance: {
+          sourceItemId: String(row.source_item_id),
+          canonicalUrl: String(row.canonical_url),
+          fetchedAt,
+          contentHash: String(row.content_hash),
+          author: author || null,
+          query: typeof rawDiscovery.query === 'string' && rawDiscovery.query.trim() ? rawDiscovery.query : null,
+        },
+        freshness: {
+          publishedAt: itemPublishedAt,
+          fetchedAt,
+          ageSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(itemPublishedAt ?? fetchedAt)) / 1000)),
+        },
+        completeness: {
+          title: title.trim().length > 0,
+          summary: summary.trim().length > 0,
+          author: author.length > 0,
+          publishedAt: itemPublishedAt !== null,
+        },
+        failureState: {
+          state: failures > 0 ? 'degraded' as const : 'healthy' as const,
+          consecutiveFailures: failures,
+          lastSuccessAt: optionalTimestamp(row.last_success_at),
+          lastFailureAt: optionalTimestamp(row.last_failure_at),
+        },
+        aggregation: {
+          signalKey: '',
+          observationCount: 1,
+          sourceCount: 1,
+          capped: false,
+        },
+        observations: [],
+      } satisfies PublicSignal;
+      signal.aggregation.signalKey = signalKeyFor(signal);
+      return signal;
+    });
+    return aggregatePublicSignals(signals, input.limit);
   }
 
   async writeHeartbeat(input: HeartbeatInput): Promise<void> {
@@ -363,6 +486,18 @@ function requiredRow<T>(rows: T[], name: string): T {
   const row = rows[0];
   if (!row) throw new Error(`Expected ${name} row`);
   return row;
+}
+
+function optionalTimestamp(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string' && Number.isFinite(Date.parse(value))) return new Date(value).toISOString();
+  return null;
+}
+
+function requiredTimestamp(value: unknown, field: string): string {
+  const timestamp = optionalTimestamp(value);
+  if (!timestamp) throw new Error(`Expected ${field} timestamp`);
+  return timestamp;
 }
 
 function toItem(row: Record<string, unknown>, fallback: SourceItemInput): SourceItem {

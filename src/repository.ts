@@ -24,9 +24,10 @@ export interface SignalRepository {
     maxItemsPerFetch?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource>;
+  listSources(input: { tenantSlug?: string; tenantId?: string }): Promise<SignalSource[]>;
   listDueSources(limit: number, now: Date): Promise<SignalSource[]>;
   getSource(sourceId: string): Promise<SignalSource | null>;
-  enqueueSourceFetch(input: EnqueueSourceJobInput): Promise<string>;
+  enqueueSourceFetch(input: EnqueueSourceJobInput): Promise<{ jobId: string; created: boolean }>;
   claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null>;
   markJobCompleted(jobId: string, result: JsonRecord): Promise<void>;
   markJobFailed(jobId: string, error: string): Promise<void>;

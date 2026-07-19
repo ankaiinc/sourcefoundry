@@ -2,6 +2,45 @@ import { describe, expect, it } from 'vitest';
 import { MemorySignalRepository } from '../src/testing/memory-repository.js';
 
 describe('MemorySignalRepository', () => {
+  it('lists only the sources belonging to the requested tenant', async () => {
+    const repo = new MemorySignalRepository();
+    const alpha = await repo.upsertTenant({ slug: 'alpha', name: 'Alpha' });
+    const beta = await repo.upsertTenant({ slug: 'beta', name: 'Beta' });
+    const alphaSource = await repo.createSource({ tenantId: alpha.id, name: 'Alpha source', sourceType: 'web', url: 'https://example.com/alpha' });
+    await repo.createSource({ tenantId: beta.id, name: 'Beta source', sourceType: 'web', url: 'https://example.com/beta' });
+
+    expect(await repo.listSources({ tenantSlug: 'alpha' })).toEqual([alphaSource]);
+    expect(await repo.listSources({ tenantId: beta.id })).toHaveLength(1);
+    expect(await repo.listSources({ tenantSlug: 'missing' })).toEqual([]);
+  });
+
+  it('reuses one active fetch job and permits a new job after completion', async () => {
+    const repo = new MemorySignalRepository();
+    const tenant = await repo.upsertTenant({ slug: 'pl', name: 'Pragmatic Leaders' });
+    const source = await repo.createSource({
+      tenantId: tenant.id,
+      name: 'A',
+      sourceType: 'rss',
+      url: 'https://example.com/a.xml',
+    });
+
+    const first = await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: source.id });
+    const duplicate = await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: source.id });
+
+    expect(first.created).toBe(true);
+    expect(duplicate).toEqual({ jobId: first.jobId, created: false });
+    expect(repo.jobs.size).toBe(1);
+
+    const claimed = await repo.claimNextJob({ jobTypes: ['fetch_source'], maxAttempts: 5 });
+    expect(claimed?.id).toBe(first.jobId);
+    await repo.markJobCompleted(first.jobId, {});
+
+    const next = await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: source.id });
+    expect(next.created).toBe(true);
+    expect(next.jobId).not.toBe(first.jobId);
+    expect(repo.jobs.size).toBe(2);
+  });
+
   it('claims each queued job once under concurrent claim calls', async () => {
     const repo = new MemorySignalRepository();
     const tenant = await repo.upsertTenant({ slug: 'pl', name: 'Pragmatic Leaders' });

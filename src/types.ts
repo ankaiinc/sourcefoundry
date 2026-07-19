@@ -78,7 +78,23 @@ export interface CandidateInput {
   metadata: JsonRecord;
 }
 
+export interface SignalObservation {
+  candidateId: string;
+  title: string;
+  summary: string;
+  url: string;
+  score: number;
+  generatedAt: string;
+  publishedAt: string | null;
+  source: PublicSignal['source'];
+  provenance: PublicSignal['provenance'];
+  freshness: PublicSignal['freshness'];
+  completeness: PublicSignal['completeness'];
+  failureState: PublicSignal['failureState'];
+}
+
 export interface PublicSignal {
+  schemaVersion: 1;
   id: string;
   tenantId: string;
   title: string;
@@ -89,6 +105,45 @@ export interface PublicSignal {
   tags: string[];
   generatedAt: string;
   publishedAt: string | null;
+  source: {
+    id: string;
+    name: string;
+    type: SourceType;
+    provider: string;
+    reliability: number;
+  };
+  provenance: {
+    sourceItemId: string;
+    canonicalUrl: string;
+    fetchedAt: string;
+    contentHash: string;
+    author: string | null;
+    query: string | null;
+  };
+  freshness: {
+    publishedAt: string | null;
+    fetchedAt: string;
+    ageSeconds: number;
+  };
+  completeness: {
+    title: boolean;
+    summary: boolean;
+    author: boolean;
+    publishedAt: boolean;
+  };
+  failureState: {
+    state: 'healthy' | 'degraded';
+    consecutiveFailures: number;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+  };
+  aggregation: {
+    signalKey: string;
+    observationCount: number;
+    sourceCount: number;
+    capped: boolean;
+  };
+  observations: SignalObservation[];
 }
 
 export interface FetchAttemptInput {
