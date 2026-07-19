@@ -2,6 +2,7 @@ import http from 'node:http';
 import { loadConfig } from './config.js';
 import { PostgresSourceFoundryRepository } from './postgres-repository.js';
 import { validateDiscoverySourceConfiguration } from './ingest/discovery.js';
+import { drainJobOnce } from './pipeline.js';
 
 const config = loadConfig();
 const repo = new PostgresSourceFoundryRepository(config.databaseUrl);
@@ -86,6 +87,15 @@ const server = http.createServer(async (req, res) => {
 
       const enqueueResult = await repo.enqueueSourceFetch(enqueueInput);
       return send(res, 202, enqueueResult);
+    }
+
+    const runJobMatch = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]{36})\/run-once$/i);
+    if (req.method === 'POST' && runJobMatch) {
+      const result = await drainJobOnce(repo, runJobMatch[1]!, { maxAttempts: config.maxAttempts });
+      if (result.detail.claimed === 0) {
+        return send(res, 409, { error: 'job is not currently claimable', jobId: runJobMatch[1] });
+      }
+      return send(res, 200, result);
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/signals') {

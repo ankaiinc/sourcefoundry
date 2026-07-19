@@ -57,14 +57,36 @@ export async function drainOnce(
     return { itemsProcessed: 0, detail: { claimed: 0 } };
   }
 
+  return executeClaimedJob(repo, job, options.fetchFn ?? fetch, options.maxAttempts);
+}
+
+export async function drainJobOnce(
+  repo: SignalRepository,
+  jobId: string,
+  options: Pick<PipelineOptions, 'maxAttempts'> & { fetchFn?: typeof fetch },
+): Promise<TickResult> {
+  const job = await repo.claimJobById({ jobId, maxAttempts: options.maxAttempts });
+  if (!job) {
+    return { itemsProcessed: 0, detail: { claimed: 0, jobId } };
+  }
+
+  return executeClaimedJob(repo, job, options.fetchFn ?? fetch, options.maxAttempts);
+}
+
+async function executeClaimedJob(
+  repo: SignalRepository,
+  job: SignalJob,
+  fetchFn: typeof fetch,
+  maxAttempts: number,
+): Promise<TickResult> {
   try {
-    const result = await processJob(repo, job, options.fetchFn ?? fetch);
+    const result = await processJob(repo, job, fetchFn);
     await repo.markJobCompleted(job.id, result.detail);
     return result;
   } catch (error) {
     const message = serializeError(error);
     const retryAt = new Date(Date.now() + backoffMs(job.attemptCount));
-    if (job.attemptCount < options.maxAttempts) {
+    if (job.attemptCount < maxAttempts) {
       await repo.deferJob(job.id, message, retryAt);
     } else {
       await repo.markJobFailed(job.id, message);

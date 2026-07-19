@@ -176,6 +176,23 @@ export class MemorySignalRepository implements SignalRepository {
     return { ...claimable };
   }
 
+  async claimJobById(input: { jobId: string; maxAttempts: number }): Promise<SignalJob | null> {
+    const job = this.jobs.get(input.jobId);
+    if (
+      !job
+      || job.jobType !== 'fetch_source'
+      || job.status !== 'queued'
+      || Date.parse(job.runAfter) > Date.now()
+      || job.attemptCount >= Math.min(job.maxAttempts, input.maxAttempts)
+    ) return null;
+
+    job.status = 'running';
+    job.attemptCount += 1;
+    job.startedAt = new Date().toISOString();
+    job.updatedAt = job.startedAt;
+    return { ...job };
+  }
+
   async markJobCompleted(jobId: string, result: JsonRecord): Promise<void> {
     const job = this.requireJob(jobId);
     job.status = 'completed';

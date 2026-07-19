@@ -177,6 +177,66 @@ describe('official social discovery adapters', () => {
     expect(JSON.stringify(result.entries[0]?.raw)).not.toContain('must-not-leave-the-provider-boundary');
   });
 
+  it('normalizes the reviewed direct-post Actor comment and identity fields', async () => {
+    process.env.APIFY_API_TOKEN = 'apify-test-token';
+    const actorSource = source(
+      'apify',
+      'https://api.apify.com/v2/acts/pratikdani~linkedin-posts-scraper/run-sync-get-dataset-items',
+    );
+    actorSource.metadata = {
+      mode: 'enrichment',
+      provider: 'apify',
+      max_results_per_query: 1,
+      max_total_charge_usd: 0.25,
+      max_run_charge_usd: 1.25,
+      request_template: { url: '$query' },
+    };
+    const postUrl = 'https://www.linkedin.com/posts/operator_activity-1234567890';
+    let requestBody: unknown;
+    const result = await fetchDiscoveryEntries(
+      actorSource,
+      (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        requestBody = JSON.parse(String(init?.body));
+        return new Response(JSON.stringify([{
+          url: postUrl,
+          title: 'Operator Founder on LinkedIn: Why agent reliability needs operating evidence',
+          post_text: 'Why agent reliability needs operating evidence and human approval.',
+          date_posted: '2026-07-19T11:00:00Z',
+          num_comments: 2,
+          top_visible_comments: [{
+            comment: 'The hard part is measuring recovery after a failed tool call.',
+            comment_date: '2026-07-19T12:00:00Z',
+            user_name: 'Product Leader',
+            user_id: 'product-leader',
+            use_url: 'https://www.linkedin.com/in/product-leader',
+          }],
+        }]));
+      }) as typeof fetch,
+      new AbortController().signal,
+      [postUrl],
+    );
+
+    expect(requestBody).toEqual({ url: postUrl });
+    expect(result.entries[0]).toMatchObject({
+      url: postUrl,
+      author: 'Operator Founder',
+      publishedAt: '2026-07-19T11:00:00.000Z',
+      conversation: {
+        provider: 'apify',
+        commentsReturned: 1,
+        commentsTotal: 2,
+        partial: true,
+        participants: [{
+          displayName: 'Product Leader',
+          handle: 'product-leader',
+          profileUrl: 'https://www.linkedin.com/in/product-leader',
+          excerpt: 'The hard part is measuring recovery after a failed tool call.',
+          publishedAt: '2026-07-19T12:00:00.000Z',
+        }],
+      },
+    });
+  });
+
   it('rejects unsafe Apify destinations, session credentials, and over-budget batches before fetch', async () => {
     process.env.APIFY_API_TOKEN = 'apify-test-token';
     const postUrl = 'https://www.linkedin.com/feed/update/urn:li:activity:1234567890';

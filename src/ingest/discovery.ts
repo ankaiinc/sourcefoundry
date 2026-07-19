@@ -347,6 +347,7 @@ function normalizeApifyItems(body: unknown): DiscoveryItem[] {
       item.companyName,
       author.name,
       author.fullName,
+      authorFromLinkedInTitle(firstString(item.title)),
     ));
     const url = firstString(item.postUrl, item.url, item.linkedinUrl, item.link);
     if (!url || !text) return [];
@@ -356,6 +357,7 @@ function normalizeApifyItems(body: unknown): DiscoveryItem[] {
       objectValue(item.comments).items,
       item.topComments,
       item.commentSnippets,
+      item.top_visible_comments,
     );
     const participants = dedupeParticipants(rawComments
       .flatMap((comment): SignalConversationParticipant[] => {
@@ -365,28 +367,31 @@ function normalizeApifyItems(body: unknown): DiscoveryItem[] {
           record.authorName,
           record.authorFullName,
           record.profileName,
+          record.user_name,
           commentAuthor.name,
           commentAuthor.fullName,
         ));
-        const excerpt = cleanText(firstString(record.text, record.commentText, record.content, record.commentary));
+        const excerpt = cleanText(firstString(record.text, record.commentText, record.comment, record.content, record.commentary));
         if (!displayName || !excerpt) return [];
         return [{
           displayName,
           handle: nullableString(firstString(
             record.authorHandle,
             record.username,
+            record.user_id,
             commentAuthor.publicIdentifier,
             commentAuthor.username,
           )),
           profileUrl: nullableLinkedInUrl(firstString(
             record.authorProfileUrl,
             record.profileUrl,
+            record.use_url,
             commentAuthor.profileUrl,
             commentAuthor.linkedinUrl,
           )),
           commentUrl: nullableLinkedInUrl(firstString(record.commentUrl, record.permalink, record.url)),
           excerpt: excerpt.slice(0, 500),
-          publishedAt: parseDateFrom(record.publishedAt, record.postedAt, record.createdAt, record.timestamp),
+          publishedAt: parseDateFrom(record.publishedAt, record.postedAt, record.comment_date, record.createdAt, record.timestamp),
         }];
       }))
       .slice(0, 10);
@@ -481,6 +486,10 @@ function dedupeEntries(entries: SourceEntry[]): SourceEntry[] {
 
 function cleanText(input: string): string {
   return input.replace(/\s+/g, ' ').trim();
+}
+
+function authorFromLinkedInTitle(value: string): string {
+  return value.match(/^(.+?)(?:['’]s Post| on LinkedIn(?::|$))/i)?.[1]?.trim() ?? '';
 }
 
 function firstString(...values: unknown[]): string {

@@ -191,6 +191,28 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     return result.rows[0] ? toJob(result.rows[0]) : null;
   }
 
+  async claimJobById(input: { jobId: string; maxAttempts: number }): Promise<SignalJob | null> {
+    const result = await this.pool.query(
+      `
+      UPDATE sourcefoundry_jobs
+      SET status = 'running',
+          attempt_count = attempt_count + 1,
+          started_at = now(),
+          completed_at = NULL,
+          last_error = NULL,
+          updated_at = now()
+      WHERE id = $1
+        AND job_type = 'fetch_source'
+        AND status = 'queued'
+        AND run_after <= now()
+        AND attempt_count < LEAST(max_attempts, $2)
+      RETURNING id, tenant_id, job_type, entity_type, entity_id, attempt_count, payload
+      `,
+      [input.jobId, input.maxAttempts],
+    );
+    return result.rows[0] ? toJob(result.rows[0]) : null;
+  }
+
   async markJobCompleted(jobId: string, result: JsonRecord): Promise<void> {
     await this.pool.query(
       `

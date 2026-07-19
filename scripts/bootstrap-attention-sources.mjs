@@ -3,6 +3,8 @@ const apiToken = process.env.SOURCEFOUNDRY_API_TOKEN ?? '';
 const dryRun = process.argv.includes('--dry-run');
 const confirmed = process.argv.includes('--confirm=create-attention-sources');
 const workerSecretsConfirmed = process.argv.includes('--confirm-worker-provider-secrets-configured');
+const runOnce = process.argv.includes('--run-once');
+const runOnceConfirmed = process.argv.includes('--confirm=run-attention-sources-once');
 
 function providerOption(name, fallback) {
   const prefix = `--${name}=`;
@@ -34,8 +36,8 @@ if (linkedinEnrichment === 'apify') {
   if (!/^[A-Za-z0-9._-]+~[A-Za-z0-9._-]+$/.test(linkedinApifyActorId)) {
     throw new Error('linkedin-apify-actor-id must be the reviewed owner~actor identifier');
   }
-  if (!['postUrls', 'urls', 'startUrls'].includes(linkedinApifyInputField)) {
-    throw new Error('linkedin-apify-input-field must be postUrls, urls, or startUrls');
+  if (!['url', 'postUrls', 'urls', 'startUrls'].includes(linkedinApifyInputField)) {
+    throw new Error('linkedin-apify-input-field must be url, postUrls, urls, or startUrls');
   }
 }
 const officialProviderRequirements = [
@@ -56,6 +58,7 @@ const providerArguments = [
 ];
 
 function apifyRequestTemplate(inputField) {
+  if (inputField === 'url') return { url: '$query' };
   if (inputField === 'startUrls') return { startUrls: [{ url: '$query' }] };
   return { [inputField]: ['$query'] };
 }
@@ -84,9 +87,9 @@ const linkedinSource = {
     metadata: {
       mode: 'discovery', provider: 'tavily', topic: 'general', search_depth: 'advanced',
       queries: [
-        'AI agents product reliability evidence founder product leader',
-        'product judgment AI adoption organizational change',
-        'human approval AI agent production failure',
+        'site:linkedin.com/posts AI agents product reliability evidence founder product leader',
+        'site:linkedin.com/posts product judgment AI adoption organizational change',
+        'site:linkedin.com/posts human approval AI agent production failure',
       ],
       include_domains: ['linkedin.com'], max_results_per_query: 8,
       relevance_terms: ['ai', 'agent', 'product', 'founder', 'evidence', 'reliability', 'judgment', 'approval'],
@@ -114,9 +117,9 @@ const xSource = xProvider === 'official' ? {
     metadata: {
       mode: 'discovery', provider: 'tavily', topic: 'general', search_depth: 'advanced',
       queries: [
-        'AI agent product reliability founder',
-        'product judgment evidence AI startup',
-        'human approval agent production failure',
+        'site:x.com inurl:status AI agent product reliability founder',
+        'site:x.com inurl:status product judgment evidence AI startup',
+        'site:x.com inurl:status human approval agent production failure',
       ],
       include_domains: ['x.com'], max_results_per_query: 8,
       relevance_terms: ['ai', 'agent', 'product', 'founder', 'evidence', 'reliability', 'judgment'],
@@ -144,9 +147,9 @@ const youtubeSource = youtubeProvider === 'official' ? {
     metadata: {
       mode: 'discovery', provider: 'tavily', topic: 'general', search_depth: 'advanced',
       queries: [
-        'AI agents production reliability product leaders',
-        'product judgment AI founder evidence',
-        'agent evaluation human approval operating model',
+        'site:youtube.com/watch AI agents production reliability product leaders',
+        'site:youtube.com/watch product judgment AI founder evidence',
+        'site:youtube.com/watch agent evaluation human approval operating model',
       ],
       include_domains: ['youtube.com'], max_results_per_query: 6,
       relevance_terms: ['ai', 'agent', 'product', 'evidence', 'reliability', 'evaluation', 'approval'],
@@ -204,6 +207,7 @@ if (dryRun) {
       'npm run bootstrap:attention -- --confirm=create-attention-sources',
       ...providerArguments,
       ...((officialProviderRequirements.length > 0 || enrichmentProviderRequirements.length > 0) ? ['--confirm-worker-provider-secrets-configured'] : []),
+      ...(runOnce ? ['--run-once', '--confirm=run-attention-sources-once'] : []),
     ].join(' '),
   }, null, 2));
   process.exit(0);
@@ -211,6 +215,12 @@ if (dryRun) {
 
 if (!confirmed) {
   throw new Error('Creating and enqueueing production Attention sources requires --confirm=create-attention-sources; use --dry-run first');
+}
+if (runOnce && !runOnceConfirmed) {
+  throw new Error('Fetching the newly enqueued Attention jobs requires --confirm=run-attention-sources-once');
+}
+if (!runOnce && runOnceConfirmed) {
+  throw new Error('--confirm=run-attention-sources-once requires --run-once');
 }
 if ((officialProviderRequirements.length > 0 || enrichmentProviderRequirements.length > 0) && !workerSecretsConfirmed) {
   throw new Error('Selected providers require --confirm-worker-provider-secrets-configured after their named worker secrets have been verified');
@@ -227,6 +237,7 @@ const tenantResult = await request('/v1/tenants', {
 const tenant = tenantResult.tenant;
 
 const sources = [];
+const oneShotResults = [];
 let enqueued = 0;
 let alreadyActive = 0;
 for (const spec of sourceSpecs) {
@@ -243,6 +254,10 @@ for (const spec of sourceSpecs) {
   const queued = await request('/v1/ingest/source', { tenantId: tenant.id, sourceId: source.id, priority: 20 });
   if (queued.created) enqueued++;
   else alreadyActive++;
+  if (runOnce) {
+    const oneShot = await request(`/v1/jobs/${queued.jobId}/run-once`, {});
+    oneShotResults.push({ sourceId: source.id, jobId: queued.jobId, result: oneShot });
+  }
 }
 
 console.log(JSON.stringify({
@@ -251,4 +266,6 @@ console.log(JSON.stringify({
   sources,
   enqueued,
   alreadyActive,
+  runOnce,
+  oneShotResults,
 }, null, 2));

@@ -22,6 +22,10 @@ describe('Attention source bootstrap plan', () => {
     });
     expect((plan.sources as Array<{ metadata: { provider: string } }>).map((source) => source.metadata.provider))
       .toEqual(['tavily', 'tavily', 'tavily']);
+    const queries = (plan.sources as Array<{ metadata: { queries: string[] } }>).map((source) => source.metadata.queries);
+    expect(queries[0]?.every((query) => query.includes('site:linkedin.com/posts'))).toBe(true);
+    expect(queries[1]?.every((query) => query.includes('site:x.com') && query.includes('inurl:status'))).toBe(true);
+    expect(queries[2]?.every((query) => query.includes('site:youtube.com/watch'))).toBe(true);
     expect(JSON.stringify(plan)).not.toContain('must-not-appear');
   });
 
@@ -107,6 +111,46 @@ describe('Attention source bootstrap plan', () => {
       'npm run bootstrap:attention -- --confirm=create-attention-sources --linkedin-enrichment=apify --linkedin-apify-actor-id=reviewed~linkedin-posts --linkedin-apify-input-field=postUrls --confirm-worker-provider-secrets-configured',
     );
     expect(JSON.stringify(plan)).not.toContain('must-not-appear');
+  });
+
+  it('supports the reviewed direct-post Actor singular URL contract without running it', () => {
+    const plan = dryRun(
+      '--linkedin-enrichment=apify',
+      '--linkedin-apify-actor-id=pratikdani~linkedin-posts-scraper',
+      '--linkedin-apify-input-field=url',
+    );
+    const sources = plan.sources as Array<{ url: string; metadata: Record<string, unknown> }>;
+    expect(sources.find((source) => source.metadata.provider === 'apify')).toMatchObject({
+      url: 'https://api.apify.com/v2/acts/pratikdani~linkedin-posts-scraper/run-sync-get-dataset-items',
+      metadata: { request_template: { url: '$query' } },
+    });
+    expect(plan.nextCommand).toBe(
+      'npm run bootstrap:attention -- --confirm=create-attention-sources --linkedin-enrichment=apify --linkedin-apify-actor-id=pratikdani~linkedin-posts-scraper --linkedin-apify-input-field=url --confirm-worker-provider-secrets-configured',
+    );
+  });
+
+  it('previews an exact-job one-shot activation while keeping it separately confirmed', () => {
+    const plan = dryRun('--run-once');
+    expect(plan).toMatchObject({ dryRun: true, mutationPerformed: false });
+    expect(plan.nextCommand).toBe(
+      'npm run bootstrap:attention -- --confirm=create-attention-sources --run-once --confirm=run-attention-sources-once',
+    );
+
+    const unconfirmed = spawnSync(process.execPath, [
+      script,
+      '--confirm=create-attention-sources',
+      '--run-once',
+    ], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SOURCEFOUNDRY_BASE_URL: 'https://sourcefoundry.invalid',
+        SOURCEFOUNDRY_API_TOKEN: 'must-not-appear',
+      },
+    });
+    expect(unconfirmed.status).not.toBe(0);
+    expect(unconfirmed.stderr).toContain('--confirm=run-attention-sources-once');
+    expect(unconfirmed.stderr).not.toContain('must-not-appear');
   });
 
   it('rejects an Apify activation without a reviewed actor contract or worker-secret acknowledgement', () => {

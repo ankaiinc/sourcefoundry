@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drainOnce, scheduleDueSources } from '../src/pipeline.js';
+import { drainJobOnce, drainOnce, scheduleDueSources } from '../src/pipeline.js';
 import { MemorySignalRepository } from '../src/testing/memory-repository.js';
 
 describe('signal pipeline', () => {
@@ -57,6 +57,38 @@ describe('signal pipeline', () => {
     expect(repo.items.size).toBe(1);
     expect(repo.candidates.size).toBe(1);
     expect(repo.attempts).toHaveLength(2);
+  });
+
+  it('runs one exact source job without consuming an unrelated backlog job', async () => {
+    const repo = new MemorySignalRepository();
+    const tenant = await repo.upsertTenant({ slug: 'attention', name: 'Attention OS' });
+    const backlog = await repo.createSource({
+      tenantId: tenant.id,
+      name: 'Legacy backlog',
+      sourceType: 'rss',
+      url: 'https://example.com/backlog.xml',
+    });
+    const target = await repo.createSource({
+      tenantId: tenant.id,
+      name: 'Targeted attention source',
+      sourceType: 'rss',
+      url: 'https://example.com/target.xml',
+      metadata: { relevance_terms: ['attention'] },
+    });
+    const backlogJob = await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: backlog.id, priority: 100 });
+    const targetJob = await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: target.id, priority: 1 });
+
+    const result = await drainJobOnce(repo, targetJob.jobId, {
+      maxAttempts: 5,
+      fetchFn: async () => new Response(`<?xml version="1.0"?><rss><channel><item>
+        <title>Attention evidence</title><link>https://example.com/attention</link>
+        <description>Relevant attention evidence.</description>
+      </item></channel></rss>`),
+    });
+
+    expect(result).toMatchObject({ itemsProcessed: 1, detail: { sourceId: target.id } });
+    expect(repo.jobs.get(targetJob.jobId)?.status).toBe('completed');
+    expect(repo.jobs.get(backlogJob.jobId)?.status).toBe('queued');
   });
 
   it('allows one contribution per source and caps a signal at three observations', async () => {
