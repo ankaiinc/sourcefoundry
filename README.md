@@ -168,3 +168,19 @@ enqueues one fetch per source, and prints identifiers but never secret values.
 Running without either flag fails before any request. Official X/YouTube
 sources can replace the lower-confidence Tavily lanes when their API
 credentials are added.
+
+Choose those official read lanes explicitly in the dry-run plan:
+
+```bash
+npm run bootstrap:attention -- --dry-run \
+  --x-provider=official \
+  --youtube-provider=official
+```
+
+The preview names `X_API_BEARER_TOKEN` and `YOUTUBE_API_KEY` as worker
+requirements but never reads or prints their values. Its `nextCommand` retains
+the reviewed provider choices. A production bootstrap using either official
+lane also requires `--confirm-worker-provider-secrets-configured`; this is an
+operator acknowledgement that the named secrets were verified in the worker,
+not permission to expose them. LinkedIn remains on the provider-neutral Tavily
+lane until the separately bounded no-cookie enrichment canary is reviewed.
