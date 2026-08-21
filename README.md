@@ -102,10 +102,10 @@ SourceFoundry decides whether its hosted provider integration can fulfill it.
 
 SourceFoundry is a control plane, not a pass-through marketplace for provider
 keys. A customer should buy a bounded evidence outcome: a number of active
-briefs and scheduled or on-demand evidence runs. SourceFoundry pays Tavily,
-Exa, Serper, feed infrastructure, and future premium connectors as cost of
-goods, then uses its source policy to decide which provider or feed should do
-the work.
+briefs and scheduled or on-demand evidence runs. For source providers whose
+commercial agreement expressly permits customer-facing hosted use, SourceFoundry
+pays the supplier as cost of goods and uses its source policy to decide which
+provider or feed should do the work.
 
 The customer-facing unit must stay independent of suppliers. A standard
 evidence run has a fixed policy, maximum source lanes, result cap, cadence, and
@@ -114,12 +114,18 @@ absorbed by SourceFoundry rather than creating an unexpected bill. That is the
 reason to charge for evidence capacity instead of exposing raw provider calls.
 
 The current service has no billing or payment collection path. Until one
-exists, autonomous workspaces stay deliberately small and rate-limited. A paid
-release should use three lanes:
+exists, autonomous workspaces stay deliberately small and rate-limited. Before
+selling hosted capacity, verify each provider's current terms and obtain a
+partner or enterprise agreement where downstream customer use, output handling,
+or resale needs permission. Standard terms from search providers can prohibit
+resale or limit use to a customer's own application; this is a commercial and
+legal release gate, not an implementation detail.
+
+A paid release should use three lanes:
 
 - **Hosted capacity:** subscription includes a defined number of active briefs
-  and evidence runs; metered overage begins only after an explicit budget is
-  set.
+  and evidence runs only on approved provider lanes; metered overage begins
+  only after an explicit budget is set.
 - **Higher-cost or private sources:** a separately metered connector budget,
   with a maximum cost declared before a job is accepted.
 - **Bring your own key:** the customer pays a provider directly; SourceFoundry
@@ -130,7 +136,8 @@ Do not sell "search everywhere" or unlimited provider calls. Tavily bills per
 credit and makes advanced search cost more than basic search; Serper also
 charges per successful query. Those variable supplier costs need a bounded
 customer unit and a policy-enforced ceiling. See the provider references for
-the current inputs: [Tavily credits](https://docs.tavily.com/documentation/api-credits)
+the current inputs: [Tavily credits](https://docs.tavily.com/documentation/api-credits),
+[Tavily terms](https://www.tavily.com/terms), [Exa terms](https://exa.ai/assets/Exa_Labs_Terms_of_Service.pdf),
 and [Serper pricing](https://serper.dev/).
 
 ## Runtime shape

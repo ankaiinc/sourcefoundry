@@ -8,6 +8,7 @@ describe('SourceFoundry landing page', () => {
     expect(page).toContain('SOURCEFOUNDRY_API_TOKEN');
     expect(page).toContain('Your sources.<br>One evidence API.');
     expect(page).toContain('Evidence capacity');
+    expect(page).toContain('Approved source lanes');
     expect(page).toContain('Product of <a href="https://4agents.fyi">4agents.fyi</a>');
   });
 });
