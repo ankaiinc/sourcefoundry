@@ -68,6 +68,28 @@ signals. HTTP failures remain HTTP failures; incompatible payloads raise a
 contract error. Neither failure is converted into an innocent-looking empty
 array.
 
+## Use from an agent
+
+The hosted service is available at `https://sources.4agents.fyi`. An agent can
+discover its tool contract without a token:
+
+- `GET /.well-known/sourcefoundry.json` — canonical endpoint, workflow, and
+  security boundary.
+- `GET /openapi.json` — OpenAPI 3.1 definition for a tool connector.
+- `GET /agent.md` — the concise operating guide for an autonomous agent.
+- `GET /v1/meta` — public capability discovery.
+
+To use data or configure sources, inject `SOURCEFOUNDRY_API_TOKEN` into the
+agent runtime's secret store and send it as a Bearer token. An agent can then
+upsert a tenant, upsert its sources, enqueue deduplicated fetches, and consume
+normalized signals. Source configuration is idempotent by tenant and URL, so a
+safe retry updates the intended source rather than creating another one.
+
+SourceFoundry owns provider keys and spend policy. Agents must never put a
+Tavily, Serper, Exa, Firecrawl, or other provider credential into a request,
+source URL, prompt, or source metadata. They configure the source intent;
+SourceFoundry decides whether its hosted provider integration can fulfill it.
+
 ## Runtime shape
 
 - API process: `src/server.ts`
