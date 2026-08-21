@@ -35,23 +35,18 @@ export const pragmaticLeadersSourcePlan: SourceSpec[] = [
     metadata: { relevance_terms: ['product', 'startup', 'ai', 'agent', 'developer', 'tool', 'open source'] },
   },
   {
-    name: 'PL new AI repositories — GitHub', sourceType: 'web', url: 'https://api.github.com/search/repositories',
-    reliability: 0.78, intervalMinutes: 360, maxItemsPerFetch: 30, timeoutSeconds: 20,
+    name: 'PL new repositories — GitHub', sourceType: 'web', url: 'https://api.github.com/search/repositories',
+    reliability: 0.78, intervalMinutes: 360, maxItemsPerFetch: 60, timeoutSeconds: 20,
     metadata: {
       mode: 'discovery', provider: 'github', lookback_days: 21, sort: 'stars', order: 'desc',
-      queries: ['AI agent in:name,description stars:>=10', 'MCP in:name,description stars:>=5'],
+      queries: [
+        'AI agent in:name,description stars:>=10',
+        'MCP in:name,description stars:>=5',
+        'developer tool in:name,description stars:>=10',
+        'product analytics in:name,description stars:>=5',
+      ],
       max_results_per_query: 15,
-      relevance_terms: ['ai', 'agent', 'mcp', 'product', 'developer', 'tool', 'evaluation', 'workflow'],
-    },
-  },
-  {
-    name: 'PL new product tools — GitHub', sourceType: 'web', url: 'https://api.github.com/search/repositories',
-    reliability: 0.76, intervalMinutes: 360, maxItemsPerFetch: 30, timeoutSeconds: 20,
-    metadata: {
-      mode: 'discovery', provider: 'github', lookback_days: 21, sort: 'stars', order: 'desc',
-      queries: ['developer tool in:name,description stars:>=10', 'product analytics in:name,description stars:>=5'],
-      max_results_per_query: 15,
-      relevance_terms: ['product', 'developer', 'tool', 'analytics', 'platform', 'open source', 'workflow'],
+      relevance_terms: ['ai', 'agent', 'mcp', 'product', 'developer', 'tool', 'analytics', 'platform', 'open source', 'evaluation', 'workflow'],
     },
   },
   {
@@ -65,23 +60,18 @@ export const pragmaticLeadersSourcePlan: SourceSpec[] = [
     },
   },
   {
-    name: 'PL agent reliability discovery — Exa', sourceType: 'web', url: 'https://api.exa.ai/search',
-    reliability: 0.86, intervalMinutes: 720, maxItemsPerFetch: 10, timeoutSeconds: 25,
+    name: 'PL product and agent discovery — Exa', sourceType: 'web', url: 'https://api.exa.ai/search',
+    reliability: 0.86, intervalMinutes: 720, maxItemsPerFetch: 20, timeoutSeconds: 25,
     metadata: {
       mode: 'discovery', provider: 'exa', search_type: 'fast', category: 'news',
-      queries: ['AI agent product reliability evaluation production incident', 'product leadership judgment AI adoption organizational change'],
+      queries: [
+        'AI agent product reliability evaluation production incident',
+        'product leadership judgment AI adoption organizational change',
+        'new developer tool open source launch adoption product',
+        'product pricing trust privacy launch decision customer backlash',
+      ],
       max_results_per_query: 5, max_content_characters: 2_000,
-      relevance_terms: ['ai', 'agent', 'product', 'reliability', 'evaluation', 'leadership', 'judgment'],
-    },
-  },
-  {
-    name: 'PL product and developer shifts — Exa', sourceType: 'web', url: 'https://api.exa.ai/search',
-    reliability: 0.86, intervalMinutes: 720, maxItemsPerFetch: 10, timeoutSeconds: 25,
-    metadata: {
-      mode: 'discovery', provider: 'exa', search_type: 'fast', category: 'news',
-      queries: ['new developer tool open source launch adoption product', 'product pricing trust privacy launch decision customer backlash'],
-      max_results_per_query: 5, max_content_characters: 2_000,
-      relevance_terms: ['product', 'developer', 'tool', 'open source', 'launch', 'pricing', 'trust', 'privacy', 'customer'],
+      relevance_terms: ['ai', 'agent', 'product', 'reliability', 'evaluation', 'leadership', 'judgment', 'developer', 'tool', 'open source', 'launch', 'pricing', 'trust', 'privacy', 'customer'],
     },
   },
   {
