@@ -44,6 +44,8 @@ describe('SourceFoundry agent discovery', () => {
     const guide = agentGuide(config);
     expect(guide).toContain('SOURCEFOUNDRY_API_TOKEN');
     expect(guide).toContain('/v1/agent-enrollments');
+    expect(guide).toContain('First useful source');
+    expect(guide).toContain('Do not\ninvent a publisher URL');
     expect(guide).toContain('Never include them in a source request');
     expect(guide).toContain('run-once');
   });

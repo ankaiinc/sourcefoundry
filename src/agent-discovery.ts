@@ -171,6 +171,38 @@ SourceFoundry turns RSS, Atom, web discovery, and approved provider searches int
 4. Enqueue a fetch with \`POST /v1/ingest/source\`. If an active job already exists, reuse its job ID.
 5. Retrieve normalized evidence with \`GET /v1/signals?tenant=<slug>\`.
 
+## First useful source
+
+If the caller gives you a public RSS or Atom feed, create it directly. Do not
+invent a publisher URL or a topic source that the caller did not request.
+
+\`POST /v1/sources\`
+
+\`\`\`json
+{
+  "tenantId": "$SOURCEFOUNDRY_TENANT_ID",
+  "name": "Caller-provided policy feed",
+  "sourceType": "rss",
+  "url": "https://publisher.example/feed.xml",
+  "intervalMinutes": ${config.selfService.minIntervalMinutes},
+  "maxItemsPerFetch": ${config.selfService.maxItemsPerFetch}
+}
+\`\`\`
+
+Save the returned \`source.id\`, then enqueue it with \`POST /v1/ingest/source\`:
+
+\`\`\`json
+{
+  "tenantId": "$SOURCEFOUNDRY_TENANT_ID",
+  "sourceId": "<source.id returned above>"
+}
+\`\`\`
+
+For hosted search lanes, use only a provider and endpoint explicitly allowed by
+the current source policy. Do not send a provider key. If no approved lane is
+available, return that limitation to the caller instead of silently selecting a
+provider or substituting an untrusted source.
+
 ## Safety rules
 
 - Treat provider credentials, cookies, and session tokens as hosted infrastructure. Never include them in a source request, source URL, or prompt.
