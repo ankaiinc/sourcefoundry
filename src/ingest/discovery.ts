@@ -2,7 +2,7 @@ import { sha256 } from '../hash.js';
 import type { JsonRecord, SignalConversation, SignalConversationParticipant, SignalSource, SourceEntry } from '../types.js';
 import { canonicalizeUrl } from '../url.js';
 
-export type DiscoveryProvider = 'firecrawl' | 'tavily' | 'exa' | 'serper' | 'x' | 'youtube' | 'youtube-comments' | 'apify' | 'generic';
+export type DiscoveryProvider = 'firecrawl' | 'tavily' | 'exa' | 'serper' | 'github' | 'x' | 'youtube' | 'youtube-comments' | 'apify' | 'generic';
 
 type DiscoveryItem = {
   title: string;
@@ -112,6 +112,15 @@ function requestUrl(source: SignalSource, query: string, limit: number): string 
     url.searchParams.set('maxResults', String(Math.min(100, limit)));
     return url.toString();
   }
+  if (provider === 'github') {
+    const lookbackDays = boundedPositiveInt(source.metadata.lookback_days, 7, 30);
+    const createdSince = new Date(Date.now() - lookbackDays * 86_400_000).toISOString().slice(0, 10);
+    url.searchParams.set('q', `${query} created:>=${createdSince}`);
+    url.searchParams.set('sort', firstString(source.metadata.sort) || 'stars');
+    url.searchParams.set('order', firstString(source.metadata.order) || 'desc');
+    url.searchParams.set('per_page', String(Math.min(30, limit)));
+    return url.toString();
+  }
   const queryParam = typeof source.metadata.query_param === 'string' ? source.metadata.query_param : 'q';
   const limitParam = typeof source.metadata.limit_param === 'string' ? source.metadata.limit_param : 'limit';
   url.searchParams.set(queryParam, query);
@@ -131,6 +140,7 @@ function discoveryProvider(value: unknown): DiscoveryProvider {
   if (value === 'tavily') return 'tavily';
   if (value === 'exa') return 'exa';
   if (value === 'serper') return 'serper';
+  if (value === 'github') return 'github';
   if (value === 'x') return 'x';
   if (value === 'youtube') return 'youtube';
   if (value === 'youtube-comments') return 'youtube-comments';
@@ -139,7 +149,7 @@ function discoveryProvider(value: unknown): DiscoveryProvider {
 }
 
 function requestMethod(source: SignalSource): 'GET' | 'POST' {
-  if (source.metadata.provider === 'x' || source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments') return 'GET';
+  if (source.metadata.provider === 'github' || source.metadata.provider === 'x' || source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments') return 'GET';
   return source.metadata.method === 'GET' ? 'GET' : 'POST';
 }
 
@@ -150,7 +160,10 @@ function requestHeaders(source: SignalSource): Record<string, string> {
   };
   if (source.metadata.provider === 'tavily') return headers;
   const token = discoveryToken(source);
-  if (source.metadata.provider === 'exa') {
+  if (source.metadata.provider === 'github') {
+    headers['x-github-api-version'] = '2022-11-28';
+    if (token) headers.authorization = `Bearer ${token}`;
+  } else if (source.metadata.provider === 'exa') {
     if (!token) throw new Error('Exa discovery source is missing EXA_API_KEY');
     headers['x-api-key'] = token;
   } else if (source.metadata.provider === 'serper') {
@@ -172,8 +185,10 @@ function discoveryToken(source: SignalSource): string {
       ? 'TAVILY_API_KEY'
       : source.metadata.provider === 'exa'
         ? 'EXA_API_KEY'
-        : source.metadata.provider === 'serper'
+      : source.metadata.provider === 'serper'
           ? 'SERPER_API_KEY'
+        : source.metadata.provider === 'github'
+          ? 'GITHUB_TOKEN'
       : source.metadata.provider === 'x'
         ? 'X_API_BEARER_TOKEN'
         : source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments'
@@ -284,6 +299,7 @@ function normalizeDiscoveryItems(body: unknown, provider: DiscoveryProvider): Di
   if (provider === 'youtube') return normalizeYouTubeItems(body);
   if (provider === 'youtube-comments') return normalizeYouTubeCommentItems(body);
   if (provider === 'apify') return normalizeApifyItems(body);
+  if (provider === 'github') return normalizeGitHubItems(body);
   if (provider === 'exa') return normalizeExaItems(body);
   if (provider === 'serper') return normalizeSerperItems(body);
   const records = candidateArrays(body)
@@ -315,6 +331,34 @@ function normalizeDiscoveryItems(body: unknown, provider: DiscoveryProvider): Di
       raw: item,
     }))
     .filter((item) => item.title && item.url);
+}
+
+function normalizeGitHubItems(body: unknown): DiscoveryItem[] {
+  const record = objectValue(body);
+  const items = Array.isArray(record.items) ? record.items : [];
+  return items.flatMap((value) => {
+    const item = objectValue(value);
+    const owner = objectValue(item.owner);
+    const title = cleanText(firstString(item.full_name, item.name));
+    const url = firstString(item.html_url);
+    if (!title || !url) return [];
+    const description = cleanText(firstString(item.description)).replace(/[.]+$/, '');
+    const stars = typeof item.stargazers_count === 'number' ? Math.max(0, Math.floor(item.stargazers_count)) : null;
+    const language = cleanText(firstString(item.language));
+    const evidence = [
+      description,
+      stars !== null ? `${stars.toLocaleString('en-US')} GitHub stars` : '',
+      language ? `Primary language: ${language}` : '',
+    ].filter(Boolean).join('. ');
+    return [{
+      title,
+      url,
+      summary: evidence,
+      author: firstString(owner.login),
+      publishedAt: parseDate(firstString(item.created_at)),
+      raw: item,
+    }];
+  });
 }
 
 function normalizeExaItems(body: unknown): DiscoveryItem[] {
@@ -751,6 +795,10 @@ export function validateDiscoverySourceConfiguration(source: SignalSource): void
     validateOfficialSearchEndpoint(source.url, 'Tavily', 'api.tavily.com', ['/search']);
     return;
   }
+  if (provider === 'github') {
+    validateOfficialSearchEndpoint(source.url, 'GitHub', 'api.github.com', ['/search/repositories']);
+    return;
+  }
   if (provider !== 'apify') return;
   let endpoint: URL;
   try {
@@ -836,5 +884,7 @@ function boundedPositiveInt(value: unknown, fallback: number, maximum: number): 
 function providerResultLimit(provider: DiscoveryProvider, requested: number): number {
   return provider === 'tavily' || provider === 'exa' || provider === 'serper'
     ? Math.min(10, requested)
+    : provider === 'github'
+      ? Math.min(30, requested)
     : requested;
 }
