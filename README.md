@@ -77,18 +77,69 @@ discover its tool contract without a token:
   security boundary.
 - `GET /openapi.json` — OpenAPI 3.1 definition for a tool connector.
 - `GET /agent.md` — the concise operating guide for an autonomous agent.
+- `GET /llms.txt` — machine-discoverable alias for the same operating guide.
 - `GET /v1/meta` — public capability discovery.
 
-To use data or configure sources, inject `SOURCEFOUNDRY_API_TOKEN` into the
-agent runtime's secret store and send it as a Bearer token. An agent can then
-upsert a tenant, upsert its sources, enqueue deduplicated fetches, and consume
-normalized signals. Source configuration is idempotent by tenant and URL, so a
-safe retry updates the intended source rather than creating another one.
+An agent can start without a pre-provisioned account: `POST
+/v1/agent-enrollments` with a unique workspace slug and name returns a
+tenant-scoped `SOURCEFOUNDRY_API_TOKEN` exactly once. Store it in the runtime
+secret store, then use it as a Bearer token to configure that workspace's
+sources, enqueue deduplicated fetches, and consume normalized signals. The
+agent cannot inspect another workspace or run provider work directly.
+
+Autonomous workspaces are intentionally bounded: at most three sources, a
+12-hour minimum fetch interval, ten results per fetch, and a shared daily job
+budget. They may use RSS/Atom feeds or the hosted Tavily, Exa, and Serper
+adapters; provider secrets remain internal. Source configuration is idempotent
+by tenant and URL, so a safe retry updates the intended source rather than
+creating another one.
 
 SourceFoundry owns provider keys and spend policy. Agents must never put a
 Tavily, Serper, Exa, Firecrawl, or other provider credential into a request,
 source URL, prompt, or source metadata. They configure the source intent;
 SourceFoundry decides whether its hosted provider integration can fulfill it.
+
+## Hosted economics
+
+SourceFoundry is a control plane, not a pass-through marketplace for provider
+keys. A customer should buy a bounded evidence outcome: a number of active
+briefs and scheduled or on-demand evidence runs. For source providers whose
+commercial agreement expressly permits customer-facing hosted use, SourceFoundry
+pays the supplier as cost of goods and uses its source policy to decide which
+provider or feed should do the work.
+
+The customer-facing unit must stay independent of suppliers. A standard
+evidence run has a fixed policy, maximum source lanes, result cap, cadence, and
+cost ceiling. If the preferred search provider fails, a normal fallback is
+absorbed by SourceFoundry rather than creating an unexpected bill. That is the
+reason to charge for evidence capacity instead of exposing raw provider calls.
+
+The current service has no billing or payment collection path. Until one
+exists, autonomous workspaces stay deliberately small and rate-limited. Before
+selling hosted capacity, verify each provider's current terms and obtain a
+partner or enterprise agreement where downstream customer use, output handling,
+or resale needs permission. Standard terms from search providers can prohibit
+resale or limit use to a customer's own application; this is a commercial and
+legal release gate, not an implementation detail.
+
+A paid release should use three lanes:
+
+- **Hosted capacity:** subscription includes a defined number of active briefs
+  and evidence runs only on approved provider lanes; metered overage begins
+  only after an explicit budget is set.
+- **Higher-cost or private sources:** a separately metered connector budget,
+  with a maximum cost declared before a job is accepted.
+- **Bring your own key:** the customer pays a provider directly; SourceFoundry
+  charges a platform fee for the policy, normalization, provenance, and stable
+  agent interface.
+
+Do not sell "search everywhere" or unlimited provider calls. Tavily bills per
+credit and makes advanced search cost more than basic search; Serper also
+charges per successful query. Those variable supplier costs need a bounded
+customer unit and a policy-enforced ceiling. See the provider references for
+the current inputs: [Tavily credits](https://docs.tavily.com/documentation/api-credits),
+[Tavily terms](https://www.tavily.com/terms), [Exa terms](https://exa.ai/assets/Exa_Labs_Terms_of_Service.pdf),
+and [Serper pricing](https://serper.dev/).
 
 ## Runtime shape
 
@@ -242,6 +293,7 @@ SOURCEFOUNDRY_API_TOKEN=...
 SOURCEFOUNDRY_PORT=8080
 SOURCEFOUNDRY_WORKER_ENABLED=1
 SOURCEFOUNDRY_RELEASE_SHA=<full git SHA injected by the image build>
+SOURCEFOUNDRY_SELF_SERVICE_ENABLED=1 # enables autonomous enrollment
 FIRECRAWL_API_KEY=... # optional, only for Firecrawl-backed discovery sources
 TAVILY_API_KEY=... # optional, only for Tavily-backed discovery sources
 EXA_API_KEY=... # optional, only for Exa-backed discovery sources

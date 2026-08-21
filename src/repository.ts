@@ -1,4 +1,5 @@
 import type {
+  AgentCredential,
   CandidateInput,
   EnqueueSourceJobInput,
   FetchAttemptInput,
@@ -15,6 +16,13 @@ import type {
 export interface SignalRepository {
   checkReadiness(): Promise<void>;
   upsertTenant(input: { slug: string; name: string; config?: JsonRecord }): Promise<SignalTenant>;
+  createAutonomousTenant(input: { slug: string; name: string }): Promise<SignalTenant | null>;
+  createAutonomousEnrollment(input: { slug: string; name: string; label: string; tokenHash: string; tokenPrefix: string; maxEnrollmentsPerDay: number }): Promise<{ tenant: SignalTenant; credential: AgentCredential } | { limited: true } | null>;
+  getTenantBySlug(slug: string): Promise<SignalTenant | null>;
+  getTenantById(tenantId: string): Promise<SignalTenant | null>;
+  createAgentCredential(input: { tenantId: string; label: string; tokenHash: string; tokenPrefix: string }): Promise<AgentCredential>;
+  findActiveAgentCredential(tokenHash: string): Promise<AgentCredential | null>;
+  countAgentCredentialsSince(since: Date): Promise<number>;
   createSource(input: {
     tenantId: string;
     name: string;
@@ -24,12 +32,17 @@ export interface SignalRepository {
     intervalMinutes?: number;
     maxItemsPerFetch?: number;
     timeoutSeconds?: number;
+    agentManaged?: boolean;
+    maxAgentManagedSources?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource>;
+  getSourceByTenantAndUrl(tenantId: string, url: string): Promise<SignalSource | null>;
+  countSourcesForTenant(tenantId: string): Promise<number>;
   listSources(input: { tenantSlug?: string; tenantId?: string }): Promise<SignalSource[]>;
   listDueSources(limit: number, now: Date): Promise<SignalSource[]>;
   getSource(sourceId: string): Promise<SignalSource | null>;
-  enqueueSourceFetch(input: EnqueueSourceJobInput): Promise<{ jobId: string; created: boolean }>;
+  enqueueSourceFetch(input: EnqueueSourceJobInput & { agentRunBudget?: { perTenantPerDay: number; serviceTotalPerDay: number } }): Promise<{ jobId: string; created: boolean; limited?: 'tenant_daily' | 'service_daily' }>;
+  countAgentManagedJobsSince(since: Date): Promise<number>;
   claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null>;
   claimJobById(input: { jobId: string; maxAttempts: number }): Promise<SignalJob | null>;
   markJobCompleted(jobId: string, result: JsonRecord): Promise<void>;
@@ -60,7 +73,19 @@ export function toSource(row: Record<string, unknown>): SignalSource {
     etag: optionalString(row.etag),
     lastModified: optionalString(row.last_modified),
     failureCount: Number(row.failure_count ?? 0),
+    agentManaged: Boolean(row.agent_managed),
     metadata: objectValue(row.metadata),
+  };
+}
+
+export function toAgentCredential(row: Record<string, unknown>): AgentCredential {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    label: String(row.label),
+    tokenPrefix: String(row.token_prefix),
+    createdAt: String(row.created_at),
+    revokedAt: optionalString(row.revoked_at),
   };
 }
 

@@ -19,6 +19,18 @@ describe('SourceFoundry runtime configuration', () => {
     }).releaseSha).toBe('abc123');
   });
 
+  it('uses conservative autonomous-workspace defaults', () => {
+    expect(loadConfig({ SOURCEFOUNDRY_DATABASE_URL: 'postgres://db' }).selfService).toEqual({
+      enabled: false,
+      maxSources: 3,
+      minIntervalMinutes: 720,
+      maxItemsPerFetch: 10,
+      maxEnrollmentsPerDay: 50,
+      maxRunsPerTenantPerDay: 6,
+      maxRunsTotalPerDay: 24,
+    });
+  });
+
   it('publishes an HTTPS canonical endpoint in production', () => {
     expect(loadConfig({
       NODE_ENV: 'production',

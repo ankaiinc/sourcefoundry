@@ -2,10 +2,11 @@ import { SOURCEFOUNDRY_SCHEMA_VERSION } from './public-contract.js';
 import type { SourceFoundryConfig } from './config.js';
 
 export const SOURCEFOUNDRY_AGENT_GUIDE_PATH = '/agent.md';
+export const SOURCEFOUNDRY_LLMS_PATH = '/llms.txt';
 export const SOURCEFOUNDRY_OPENAPI_PATH = '/openapi.json';
 export const SOURCEFOUNDRY_DISCOVERY_PATH = '/.well-known/sourcefoundry.json';
 
-export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'releaseSha'>): Record<string, unknown> {
+export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'releaseSha' | 'selfService'>): Record<string, unknown> {
   return {
     schemaVersion: SOURCEFOUNDRY_SCHEMA_VERSION,
     release: config.releaseSha,
@@ -15,6 +16,7 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     discovery: {
       openapi: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_OPENAPI_PATH),
       agentGuide: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_AGENT_GUIDE_PATH),
+      llms: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_LLMS_PATH),
       capabilities: `${config.publicBaseUrl}/v1/meta`,
     },
     authentication: {
@@ -25,7 +27,7 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     },
     workflow: [
       'Read /v1/meta or the OpenAPI document.',
-      'Upsert a tenant with POST /v1/tenants.',
+      'Create an autonomous workspace and one-time tenant-scoped credential with POST /v1/agent-enrollments.',
       'Upsert each source with POST /v1/sources.',
       'Enqueue a fetch with POST /v1/ingest/source and let the worker process it.',
       'Read normalized evidence with GET /v1/signals.',
@@ -34,12 +36,13 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
       'Source upserts are idempotent by tenant and source URL.',
       'Active source-fetch jobs are deduplicated by tenant and source.',
       'Provider API keys, cookies, and session tokens are managed by SourceFoundry and must never be sent in an API request.',
-      'Run-once jobs may trigger provider usage; use only when the caller explicitly requests immediate execution.',
+      'Autonomous credentials enqueue work but cannot run a job directly.',
+      `Autonomous workspaces are limited to ${config.selfService.maxSources} sources, a ${config.selfService.minIntervalMinutes}-minute minimum interval, and ${config.selfService.maxItemsPerFetch} items per fetch.`,
     ],
   };
 }
 
-export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'releaseSha'>): Record<string, unknown> {
+export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'releaseSha' | 'selfService'>): Record<string, unknown> {
   return {
     openapi: '3.1.0',
     info: {
@@ -53,6 +56,27 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
       '/health': { get: operation('Process liveness', 'Returns public service identity and release.', { security: [] }) },
       '/ready': { get: operation('Service readiness', 'Returns readiness after a database connectivity check.', { security: [] }) },
       '/v1/meta': { get: operation('Discover agent capabilities', 'Returns the supported agent workflow and authentication boundary.', { security: [] }) },
+      '/llms.txt': { get: operation('Read the agent guide', 'A machine-discoverable alias for the SourceFoundry agent guide.', { security: [] }) },
+      '/v1/agent-enrollments': {
+        post: operation('Create an autonomous workspace', 'Creates a tenant-scoped credential and returns its secret exactly once. No authentication is required.', {
+          security: [],
+          requestBody: jsonBody({
+            type: 'object', required: ['slug', 'name'], properties: {
+              slug: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$', example: 'acme-research' },
+              name: { type: 'string', example: 'Acme Research' },
+              agentLabel: { type: 'string', example: 'research-agent' },
+            },
+          }),
+          responses: {
+            '201': { description: 'Workspace and one-time agent credential created.' },
+            '400': { '$ref': '#/components/responses/Error' },
+            '403': { '$ref': '#/components/responses/Error' },
+            '409': { '$ref': '#/components/responses/Error' },
+            '429': { '$ref': '#/components/responses/Error' },
+            '500': { '$ref': '#/components/responses/Error' },
+          },
+        }),
+      },
       '/v1/tenants': {
         post: operation('Upsert a tenant', 'Safe to repeat for the same slug.', {
           requestBody: jsonBody({
@@ -129,7 +153,7 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
   };
 }
 
-export function agentGuide(config: Pick<SourceFoundryConfig, 'publicBaseUrl'>): string {
+export function agentGuide(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'selfService'>): string {
   return `# SourceFoundry agent guide
 
 SourceFoundry turns RSS, Atom, web discovery, and approved provider searches into one normalized evidence contract. It is a source-management utility, not a reader-facing news product.
@@ -139,21 +163,55 @@ SourceFoundry turns RSS, Atom, web discovery, and approved provider searches int
 - Base URL: ${config.publicBaseUrl}
 - OpenAPI: ${absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_OPENAPI_PATH)}
 - Capability discovery: ${config.publicBaseUrl}/v1/meta
+- Create a workspace: \`POST /v1/agent-enrollments\` with a unique \`slug\`, \`name\`, and optional \`agentLabel\`. The returned token is shown once; store it as \`SOURCEFOUNDRY_API_TOKEN\`.
 - Authentication: send \`Authorization: Bearer $SOURCEFOUNDRY_API_TOKEN\` from the agent runtime secret store.
 
 ## Configure and use
 
 1. Read \`/v1/meta\` to confirm the service contract.
-2. Create or update the requested tenant with \`POST /v1/tenants\`.
+2. Create an autonomous workspace with \`POST /v1/agent-enrollments\`; keep the returned \`tenant.id\` and token.
 3. Create or update sources with \`POST /v1/sources\`. Repeating the same tenant and URL updates the source rather than duplicating it.
 4. Enqueue a fetch with \`POST /v1/ingest/source\`. If an active job already exists, reuse its job ID.
 5. Retrieve normalized evidence with \`GET /v1/signals?tenant=<slug>\`.
+
+## First useful source
+
+If the caller gives you a public RSS or Atom feed, create it directly. Do not
+invent a publisher URL or a topic source that the caller did not request.
+
+\`POST /v1/sources\`
+
+\`\`\`json
+{
+  "tenantId": "$SOURCEFOUNDRY_TENANT_ID",
+  "name": "Caller-provided policy feed",
+  "sourceType": "rss",
+  "url": "https://publisher.example/feed.xml",
+  "intervalMinutes": ${config.selfService.minIntervalMinutes},
+  "maxItemsPerFetch": ${config.selfService.maxItemsPerFetch}
+}
+\`\`\`
+
+Save the returned \`source.id\`, then enqueue it with \`POST /v1/ingest/source\`:
+
+\`\`\`json
+{
+  "tenantId": "$SOURCEFOUNDRY_TENANT_ID",
+  "sourceId": "<source.id returned above>"
+}
+\`\`\`
+
+For hosted search lanes, use only a provider and endpoint explicitly allowed by
+the current source policy. Do not send a provider key. If no approved lane is
+available, return that limitation to the caller instead of silently selecting a
+provider or substituting an untrusted source.
 
 ## Safety rules
 
 - Treat provider credentials, cookies, and session tokens as hosted infrastructure. Never include them in a source request, source URL, or prompt.
 - Configure only the tenant and sources the caller asked for.
-- Enqueue work; do not call \`run-once\` unless the caller explicitly requests immediate execution, because it can make a provider request.
+- Autonomous workspaces can configure at most ${config.selfService.maxSources} sources, with at least ${config.selfService.minIntervalMinutes} minutes between fetches and at most ${config.selfService.maxItemsPerFetch} items per fetch.
+- Enqueue work; autonomous credentials cannot call \`run-once\`, because direct execution can make an unbounded provider request.
 - Use the returned \`schemaVersion\`, \`release\`, error code, and \`retryable\` flag to make decisions. Do not silently treat an error as an empty feed.
 `;
 }
