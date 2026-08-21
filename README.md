@@ -98,6 +98,41 @@ Tavily, Serper, Exa, Firecrawl, or other provider credential into a request,
 source URL, prompt, or source metadata. They configure the source intent;
 SourceFoundry decides whether its hosted provider integration can fulfill it.
 
+## Hosted economics
+
+SourceFoundry is a control plane, not a pass-through marketplace for provider
+keys. A customer should buy a bounded evidence outcome: a number of active
+briefs and scheduled or on-demand evidence runs. SourceFoundry pays Tavily,
+Exa, Serper, feed infrastructure, and future premium connectors as cost of
+goods, then uses its source policy to decide which provider or feed should do
+the work.
+
+The customer-facing unit must stay independent of suppliers. A standard
+evidence run has a fixed policy, maximum source lanes, result cap, cadence, and
+cost ceiling. If the preferred search provider fails, a normal fallback is
+absorbed by SourceFoundry rather than creating an unexpected bill. That is the
+reason to charge for evidence capacity instead of exposing raw provider calls.
+
+The current service has no billing or payment collection path. Until one
+exists, autonomous workspaces stay deliberately small and rate-limited. A paid
+release should use three lanes:
+
+- **Hosted capacity:** subscription includes a defined number of active briefs
+  and evidence runs; metered overage begins only after an explicit budget is
+  set.
+- **Higher-cost or private sources:** a separately metered connector budget,
+  with a maximum cost declared before a job is accepted.
+- **Bring your own key:** the customer pays a provider directly; SourceFoundry
+  charges a platform fee for the policy, normalization, provenance, and stable
+  agent interface.
+
+Do not sell "search everywhere" or unlimited provider calls. Tavily bills per
+credit and makes advanced search cost more than basic search; Serper also
+charges per successful query. Those variable supplier costs need a bounded
+customer unit and a policy-enforced ceiling. See the provider references for
+the current inputs: [Tavily credits](https://docs.tavily.com/documentation/api-credits)
+and [Serper pricing](https://serper.dev/).
+
 ## Runtime shape
 
 - API process: `src/server.ts`
