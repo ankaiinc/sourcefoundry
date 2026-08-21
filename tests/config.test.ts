@@ -26,7 +26,8 @@ describe('SourceFoundry runtime configuration', () => {
       minIntervalMinutes: 720,
       maxItemsPerFetch: 10,
       maxEnrollmentsPerDay: 50,
-      maxRunsPerDay: 24,
+      maxRunsPerTenantPerDay: 6,
+      maxRunsTotalPerDay: 24,
     });
   });
 

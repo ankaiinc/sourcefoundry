@@ -36,7 +36,7 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
       'Source upserts are idempotent by tenant and source URL.',
       'Active source-fetch jobs are deduplicated by tenant and source.',
       'Provider API keys, cookies, and session tokens are managed by SourceFoundry and must never be sent in an API request.',
-      'Run-once jobs may trigger provider usage; use only when the caller explicitly requests immediate execution.',
+      'Autonomous credentials enqueue work but cannot run a job directly.',
       `Autonomous workspaces are limited to ${config.selfService.maxSources} sources, a ${config.selfService.minIntervalMinutes}-minute minimum interval, and ${config.selfService.maxItemsPerFetch} items per fetch.`,
     ],
   };

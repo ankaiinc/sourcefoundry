@@ -25,6 +25,7 @@ interface MemoryJob extends SignalJob {
   lastError: string | null;
   startedAt: string | null;
   updatedAt: string;
+  createdAt: string;
 }
 
 export class MemorySignalRepository implements SignalRepository {
@@ -91,6 +92,17 @@ export class MemorySignalRepository implements SignalRepository {
     return credential;
   }
 
+  async createAutonomousEnrollment(input: { slug: string; name: string; label: string; tokenHash: string; tokenPrefix: string; maxEnrollmentsPerDay: number }): Promise<{ tenant: SignalTenant; credential: AgentCredential } | { limited: true } | null> {
+    const since = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+    if (Array.from(this.agentCredentials.values()).filter((credential) => Date.parse(credential.createdAt) >= since).length >= input.maxEnrollmentsPerDay) {
+      return { limited: true };
+    }
+    const tenant = await this.createAutonomousTenant({ slug: input.slug, name: input.name });
+    if (!tenant) return null;
+    const credential = await this.createAgentCredential({ tenantId: tenant.id, label: input.label, tokenHash: input.tokenHash, tokenPrefix: input.tokenPrefix });
+    return { tenant, credential };
+  }
+
   async findActiveAgentCredential(tokenHash: string): Promise<AgentCredential | null> {
     return Array.from(this.agentCredentials.values()).find(
       (credential) => credential.tokenHash === tokenHash && credential.revokedAt === null,
@@ -111,6 +123,7 @@ export class MemorySignalRepository implements SignalRepository {
     maxItemsPerFetch?: number;
     timeoutSeconds?: number;
     agentManaged?: boolean;
+    maxAgentManagedSources?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource> {
     for (const source of this.sources.values()) {
@@ -129,6 +142,10 @@ export class MemorySignalRepository implements SignalRepository {
         this.sources.set(updated.id, updated);
         return updated;
       }
+    }
+    if (input.agentManaged && input.maxAgentManagedSources !== undefined) {
+      const count = Array.from(this.sources.values()).filter((source) => source.tenantId === input.tenantId && source.agentManaged).length;
+      if (count >= input.maxAgentManagedSources) throw new Error('Autonomous workspace source limit reached');
     }
     const source: SignalSource = {
       id: this.id('source'),
@@ -180,8 +197,8 @@ export class MemorySignalRepository implements SignalRepository {
   }
 
   async enqueueSourceFetch(
-    input: EnqueueSourceJobInput,
-  ): Promise<{ jobId: string; created: boolean }> {
+    input: EnqueueSourceJobInput & { agentRunBudget?: { perTenantPerDay: number; serviceTotalPerDay: number } },
+  ): Promise<{ jobId: string; created: boolean; limited?: 'tenant_daily' | 'service_daily' }> {
     const active = Array.from(this.jobs.values()).find(
       (job) =>
         job.tenantId === input.tenantId &&
@@ -190,6 +207,21 @@ export class MemorySignalRepository implements SignalRepository {
         (job.status === 'queued' || job.status === 'running'),
     );
     if (active) return { jobId: active.id, created: false };
+
+    const source = this.sources.get(input.sourceId);
+    if (source?.agentManaged && input.agentRunBudget) {
+      const since = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+      const agentJobs = Array.from(this.jobs.values()).filter((job) => {
+        const jobSource = job.entityId ? this.sources.get(job.entityId) : undefined;
+        return job.jobType === 'fetch_source' && jobSource?.agentManaged && Date.parse(job.createdAt) >= since;
+      });
+      if (agentJobs.filter((job) => job.tenantId === input.tenantId).length >= input.agentRunBudget.perTenantPerDay) {
+        return { jobId: '', created: false, limited: 'tenant_daily' };
+      }
+      if (agentJobs.length >= input.agentRunBudget.serviceTotalPerDay) {
+        return { jobId: '', created: false, limited: 'service_daily' };
+      }
+    }
 
     const id = this.id('job');
     this.jobs.set(id, {
@@ -208,6 +240,7 @@ export class MemorySignalRepository implements SignalRepository {
       lastError: null,
       startedAt: null,
       updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     });
     return { jobId: id, created: true };
   }
@@ -217,7 +250,7 @@ export class MemorySignalRepository implements SignalRepository {
       const source = job.entityId ? this.sources.get(job.entityId) : undefined;
       return job.jobType === 'fetch_source'
         && source?.agentManaged === true
-        && Date.parse(job.updatedAt) >= since.getTime();
+        && Date.parse(job.createdAt) >= since.getTime();
     }).length;
   }
 

@@ -15,7 +15,8 @@ export interface SourceFoundryConfig {
     minIntervalMinutes: number;
     maxItemsPerFetch: number;
     maxEnrollmentsPerDay: number;
-    maxRunsPerDay: number;
+    maxRunsPerTenantPerDay: number;
+    maxRunsTotalPerDay: number;
   };
 }
 
@@ -50,7 +51,8 @@ export function loadConfig(
       minIntervalMinutes: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MIN_INTERVAL_MINUTES, 720),
       maxItemsPerFetch: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_ITEMS_PER_FETCH, 10),
       maxEnrollmentsPerDay: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_ENROLLMENTS_PER_DAY, 50),
-      maxRunsPerDay: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_RUNS_PER_DAY, 24),
+      maxRunsPerTenantPerDay: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_RUNS_PER_TENANT_PER_DAY, 6),
+      maxRunsTotalPerDay: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_RUNS_TOTAL_PER_DAY, 24),
     },
   };
 }

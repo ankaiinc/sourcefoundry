@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { loadConfig } from './config.js';
-import { PostgresSourceFoundryRepository } from './postgres-repository.js';
+import { AgentSourceLimitError, PostgresSourceFoundryRepository } from './postgres-repository.js';
 import { validateDiscoverySourceConfiguration } from './ingest/discovery.js';
 import { drainJobOnce } from './pipeline.js';
 import {
@@ -13,7 +13,7 @@ import {
   SOURCEFOUNDRY_LLMS_PATH,
   SOURCEFOUNDRY_OPENAPI_PATH,
 } from './agent-discovery.js';
-import { createAgentToken, startOfUtcDay, tokenHash, tokenPrefix, validateAgentSourcePolicy } from './agent-access.js';
+import { createAgentToken, tokenHash, tokenPrefix, validateAgentSourcePolicy } from './agent-access.js';
 import { landingPage } from './landing.js';
 import type { AgentCredential, SignalSource } from './types.js';
 import {
@@ -133,10 +133,6 @@ const server = http.createServer(async (req, res) => {
 
       if (access.kind === 'agent') {
         assertAgentTenant(access.credential, sourceInput.tenantId);
-        const existing = await repo.getSourceByTenantAndUrl(sourceInput.tenantId, sourceInput.url);
-        if (!existing && await repo.countSourcesForTenant(sourceInput.tenantId) >= config.selfService.maxSources) {
-          throw new ApiError(429, 'rate_limited', `Autonomous workspaces may configure at most ${config.selfService.maxSources} sources`);
-        }
         try {
           validateAgentSourcePolicy({
             sourceType: sourceInput.sourceType,
@@ -152,6 +148,7 @@ const server = http.createServer(async (req, res) => {
           throw new ApiError(400, 'bad_request', error instanceof Error ? error.message : String(error));
         }
         sourceInput.agentManaged = true;
+        sourceInput.maxAgentManagedSources = config.selfService.maxSources;
       }
 
       validateDiscoverySourceConfiguration({
@@ -169,7 +166,15 @@ const server = http.createServer(async (req, res) => {
         metadata: sourceInput.metadata ?? {},
       });
 
-      const source = await repo.createSource(sourceInput);
+      let source: SignalSource;
+      try {
+        source = await repo.createSource(sourceInput);
+      } catch (error) {
+        if (error instanceof AgentSourceLimitError || error instanceof Error && error.message === 'Autonomous workspace source limit reached') {
+          throw new ApiError(429, 'rate_limited', `Autonomous workspaces may configure at most ${config.selfService.maxSources} sources`);
+        }
+        throw error;
+      }
       return send(res, 200, versioned({ source }));
     }
 
@@ -202,7 +207,21 @@ const server = http.createServer(async (req, res) => {
         throw new ApiError(404, 'not_found', 'Source not found');
       }
 
-      const enqueueResult = await repo.enqueueSourceFetch(enqueueInput);
+      const enqueueResult = await repo.enqueueSourceFetch({
+        ...enqueueInput,
+        ...(access.kind === 'agent' ? {
+          agentRunBudget: {
+            perTenantPerDay: config.selfService.maxRunsPerTenantPerDay,
+            serviceTotalPerDay: config.selfService.maxRunsTotalPerDay,
+          },
+        } : {}),
+      });
+      if (enqueueResult.limited) {
+        const message = enqueueResult.limited === 'tenant_daily'
+          ? `Autonomous workspaces may enqueue at most ${config.selfService.maxRunsPerTenantPerDay} runs per day`
+          : 'Autonomous service capacity is currently full; retry tomorrow';
+        throw new ApiError(429, 'rate_limited', message);
+      }
       return send(res, 202, versioned(enqueueResult));
     }
 
@@ -262,22 +281,24 @@ server.listen(config.port, () => {
 
 async function enrollAgent(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (!config.selfService.enabled) throw new ApiError(403, 'forbidden', 'Autonomous enrollment is not enabled');
-  if (await repo.countAgentCredentialsSince(startOfUtcDay()) >= config.selfService.maxEnrollmentsPerDay) {
-    throw new ApiError(429, 'rate_limited', 'Autonomous enrollment capacity is currently full; retry tomorrow');
-  }
   const body = await readJson(req);
   const slug = requiredSlug(body.slug);
   const name = requiredString(body.name, 'name');
   const label = requiredString(body.agentLabel ?? 'autonomous-agent', 'agentLabel');
-  const tenant = await repo.createAutonomousTenant({ slug, name });
-  if (!tenant) throw new ApiError(409, 'conflict', 'That workspace slug is already claimed');
   const token = createAgentToken();
-  const credential = await repo.createAgentCredential({
-    tenantId: tenant.id,
+  const enrollment = await repo.createAutonomousEnrollment({
+    slug,
+    name,
     label,
     tokenHash: tokenHash(token),
     tokenPrefix: tokenPrefix(token),
+    maxEnrollmentsPerDay: config.selfService.maxEnrollmentsPerDay,
   });
+  if (enrollment && 'limited' in enrollment) {
+    throw new ApiError(429, 'rate_limited', 'Autonomous enrollment capacity is currently full; retry tomorrow');
+  }
+  if (!enrollment) throw new ApiError(409, 'conflict', 'That workspace slug is already claimed');
+  const { tenant, credential } = enrollment;
   return send(res, 201, versioned({
     tenant,
     credential: { id: credential.id, label: credential.label, tokenPrefix: credential.tokenPrefix },
@@ -333,6 +354,7 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
     'cache-control': 'no-store',
     'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
     'x-sourcefoundry-release': config.releaseSha,
+    ...securityHeaders(),
   });
   res.end(JSON.stringify(body));
 }
@@ -343,6 +365,7 @@ function sendText(res: http.ServerResponse, status: number, body: string): void 
     'cache-control': 'no-store',
     'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
     'x-sourcefoundry-release': config.releaseSha,
+    ...securityHeaders(),
   });
   res.end(body);
 }
@@ -353,8 +376,20 @@ function sendHtml(res: http.ServerResponse, status: number, body: string): void 
     'cache-control': 'no-store',
     'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
     'x-sourcefoundry-release': config.releaseSha,
+    ...securityHeaders(),
   });
   res.end(body);
+}
+
+function securityHeaders(): Record<string, string> {
+  return {
+    'content-security-policy': "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; connect-src 'self'; img-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+    'cross-origin-opener-policy': 'same-origin',
+    'permissions-policy': 'clipboard-write=(self)',
+    'referrer-policy': 'no-referrer',
+    'strict-transport-security': 'max-age=31536000; includeSubDomains',
+    'x-content-type-options': 'nosniff',
+  };
 }
 
 function sendError(

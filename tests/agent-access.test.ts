@@ -17,6 +17,8 @@ describe('autonomous agent access', () => {
 
   it('rejects autonomous sources that could bypass cost and network boundaries', () => {
     expect(() => validateAgentSourcePolicy({ sourceType: 'rss', url: 'https://127.0.0.1/feed', intervalMinutes: 720, maxItemsPerFetch: 10, metadata: {} }, policy)).toThrow('private network');
+    expect(() => validateAgentSourcePolicy({ sourceType: 'rss', url: 'https://[::1]/feed', intervalMinutes: 720, maxItemsPerFetch: 10, metadata: {} }, policy)).toThrow('private network');
+    expect(() => validateAgentSourcePolicy({ sourceType: 'rss', url: 'https://[fd00::1]/feed', intervalMinutes: 720, maxItemsPerFetch: 10, metadata: {} }, policy)).toThrow('private network');
     expect(() => validateAgentSourcePolicy({ sourceType: 'web', url: 'https://api.tavily.com/search', intervalMinutes: 60, maxItemsPerFetch: 10, metadata: { provider: 'tavily' } }, policy)).toThrow('at least 720');
     expect(() => validateAgentSourcePolicy({ sourceType: 'web', url: 'https://api.tavily.com/search', intervalMinutes: 720, maxItemsPerFetch: 10, metadata: { provider: 'tavily', api_key: 'nope' } }, policy)).toThrow('credentials');
   });

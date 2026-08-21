@@ -17,6 +17,7 @@ export interface SignalRepository {
   checkReadiness(): Promise<void>;
   upsertTenant(input: { slug: string; name: string; config?: JsonRecord }): Promise<SignalTenant>;
   createAutonomousTenant(input: { slug: string; name: string }): Promise<SignalTenant | null>;
+  createAutonomousEnrollment(input: { slug: string; name: string; label: string; tokenHash: string; tokenPrefix: string; maxEnrollmentsPerDay: number }): Promise<{ tenant: SignalTenant; credential: AgentCredential } | { limited: true } | null>;
   getTenantBySlug(slug: string): Promise<SignalTenant | null>;
   getTenantById(tenantId: string): Promise<SignalTenant | null>;
   createAgentCredential(input: { tenantId: string; label: string; tokenHash: string; tokenPrefix: string }): Promise<AgentCredential>;
@@ -32,6 +33,7 @@ export interface SignalRepository {
     maxItemsPerFetch?: number;
     timeoutSeconds?: number;
     agentManaged?: boolean;
+    maxAgentManagedSources?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource>;
   getSourceByTenantAndUrl(tenantId: string, url: string): Promise<SignalSource | null>;
@@ -39,7 +41,7 @@ export interface SignalRepository {
   listSources(input: { tenantSlug?: string; tenantId?: string }): Promise<SignalSource[]>;
   listDueSources(limit: number, now: Date): Promise<SignalSource[]>;
   getSource(sourceId: string): Promise<SignalSource | null>;
-  enqueueSourceFetch(input: EnqueueSourceJobInput): Promise<{ jobId: string; created: boolean }>;
+  enqueueSourceFetch(input: EnqueueSourceJobInput & { agentRunBudget?: { perTenantPerDay: number; serviceTotalPerDay: number } }): Promise<{ jobId: string; created: boolean; limited?: 'tenant_daily' | 'service_daily' }>;
   countAgentManagedJobsSince(since: Date): Promise<number>;
   claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null>;
   claimJobById(input: { jobId: string; maxAttempts: number }): Promise<SignalJob | null>;

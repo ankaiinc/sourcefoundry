@@ -19,6 +19,13 @@ import { conversationFromPayload } from './conversation.js';
 
 const { Pool } = pg;
 
+export class AgentSourceLimitError extends Error {
+  constructor() {
+    super('Autonomous workspace source limit reached');
+    this.name = 'AgentSourceLimitError';
+  }
+}
+
 export class PostgresSourceFoundryRepository implements SignalRepository {
   private readonly pool: pg.Pool;
 
@@ -92,6 +99,44 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     return toAgentCredential(requiredRow(result.rows, 'agent credential'));
   }
 
+  async createAutonomousEnrollment(input: { slug: string; name: string; label: string; tokenHash: string; tokenPrefix: string; maxEnrollmentsPerDay: number }): Promise<{ tenant: SignalTenant; credential: AgentCredential } | { limited: true } | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['agent-enrollment:service']);
+      const now = new Date();
+      const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+      const enrollmentCount = await client.query(
+        'SELECT count(*)::int AS count FROM sourcefoundry_agent_credentials WHERE created_at >= $1',
+        [since],
+      );
+      if (Number(requiredRow(enrollmentCount.rows, 'agent credential count').count ?? 0) >= input.maxEnrollmentsPerDay) {
+        await client.query('COMMIT');
+        return { limited: true };
+      }
+      const tenantResult = await client.query(
+        'INSERT INTO sourcefoundry_tenants (slug, name, config) VALUES ($1, $2, $3) ON CONFLICT (slug) DO NOTHING RETURNING *',
+        [input.slug, input.name, { autonomous: true }],
+      );
+      if (!tenantResult.rows[0]) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const tenant = toTenant(tenantResult.rows[0]);
+      const credentialResult = await client.query(
+        'INSERT INTO sourcefoundry_agent_credentials (tenant_id, label, token_hash, token_prefix) VALUES ($1, $2, $3, $4) RETURNING *',
+        [tenant.id, input.label, input.tokenHash, input.tokenPrefix],
+      );
+      await client.query('COMMIT');
+      return { tenant, credential: toAgentCredential(requiredRow(credentialResult.rows, 'agent credential')) };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async findActiveAgentCredential(tokenHash: string): Promise<AgentCredential | null> {
     const result = await this.pool.query(
       'SELECT * FROM sourcefoundry_agent_credentials WHERE token_hash = $1 AND revoked_at IS NULL LIMIT 1',
@@ -118,9 +163,52 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     maxItemsPerFetch?: number;
     timeoutSeconds?: number;
     agentManaged?: boolean;
+    maxAgentManagedSources?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource> {
-    const result = await this.pool.query(
+    if (!input.agentManaged || input.maxAgentManagedSources === undefined) return this.upsertSource(input);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`agent-source-cap:${input.tenantId}`]);
+      const existing = await client.query(
+        'SELECT id FROM sourcefoundry_sources WHERE tenant_id = $1 AND url = $2 LIMIT 1',
+        [input.tenantId, input.url],
+      );
+      if (!existing.rows[0]) {
+        const count = await client.query(
+          'SELECT count(*)::int AS count FROM sourcefoundry_sources WHERE tenant_id = $1 AND agent_managed = true',
+          [input.tenantId],
+        );
+        if (Number(requiredRow(count.rows, 'agent source count').count ?? 0) >= input.maxAgentManagedSources) {
+          throw new AgentSourceLimitError();
+        }
+      }
+      const source = await this.upsertSource(input, client);
+      await client.query('COMMIT');
+      return source;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async upsertSource(input: {
+    tenantId: string;
+    name: string;
+    sourceType: 'rss' | 'atom' | 'web';
+    url: string;
+    reliability?: number;
+    intervalMinutes?: number;
+    maxItemsPerFetch?: number;
+    timeoutSeconds?: number;
+    agentManaged?: boolean;
+    maxAgentManagedSources?: number;
+    metadata?: JsonRecord;
+  }, client: Pick<pg.Pool, 'query'> = this.pool): Promise<SignalSource> {
+    const result = await client.query(
       `
       INSERT INTO sourcefoundry_sources (
         tenant_id, name, source_type, url, reliability, interval_minutes,
@@ -209,11 +297,15 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
   }
 
   async enqueueSourceFetch(
-    input: EnqueueSourceJobInput,
-  ): Promise<{ jobId: string; created: boolean }> {
+    input: EnqueueSourceJobInput & { agentRunBudget?: { perTenantPerDay: number; serviceTotalPerDay: number } },
+  ): Promise<{ jobId: string; created: boolean; limited?: 'tenant_daily' | 'service_daily' }> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      if (input.agentRunBudget) {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['agent-run-budget:service']);
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`agent-run-budget:${input.tenantId}`]);
+      }
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         `fetch_source:${input.tenantId}:${input.sourceId}`,
       ]);
@@ -235,6 +327,40 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
       if (existing.rows[0]) {
         await client.query('COMMIT');
         return { jobId: String(existing.rows[0].id), created: false };
+      }
+
+      if (input.agentRunBudget) {
+        const source = await client.query(
+          'SELECT agent_managed FROM sourcefoundry_sources WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+          [input.sourceId, input.tenantId],
+        );
+        if (source.rows[0]?.agent_managed === true) {
+          const now = new Date();
+          const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+          const tenantCount = await client.query(
+            `SELECT count(*)::int AS count
+             FROM sourcefoundry_jobs jobs
+             JOIN sourcefoundry_sources sources ON sources.id = jobs.entity_id
+             WHERE jobs.job_type = 'fetch_source' AND jobs.tenant_id = $1
+               AND sources.agent_managed = true AND jobs.created_at >= $2`,
+            [input.tenantId, since],
+          );
+          if (Number(requiredRow(tenantCount.rows, 'tenant agent-managed job count').count ?? 0) >= input.agentRunBudget.perTenantPerDay) {
+            await client.query('COMMIT');
+            return { jobId: '', created: false, limited: 'tenant_daily' };
+          }
+          const serviceCount = await client.query(
+            `SELECT count(*)::int AS count
+             FROM sourcefoundry_jobs jobs
+             JOIN sourcefoundry_sources sources ON sources.id = jobs.entity_id
+             WHERE jobs.job_type = 'fetch_source' AND sources.agent_managed = true AND jobs.created_at >= $1`,
+            [since],
+          );
+          if (Number(requiredRow(serviceCount.rows, 'service agent-managed job count').count ?? 0) >= input.agentRunBudget.serviceTotalPerDay) {
+            await client.query('COMMIT');
+            return { jobId: '', created: false, limited: 'service_daily' };
+          }
+        }
       }
 
       const inserted = await client.query(

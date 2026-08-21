@@ -41,6 +41,24 @@ describe('MemorySignalRepository', () => {
     expect(repo.jobs.size).toBe(2);
   });
 
+  it('enforces tenant and service daily budgets after an agent job completes', async () => {
+    const repo = new MemorySignalRepository();
+    const alpha = await repo.upsertTenant({ slug: 'alpha', name: 'Alpha' });
+    const beta = await repo.upsertTenant({ slug: 'beta', name: 'Beta' });
+    const alphaSource = await repo.createSource({ tenantId: alpha.id, name: 'Alpha', sourceType: 'rss', url: 'https://example.com/alpha.xml', agentManaged: true });
+    const betaSource = await repo.createSource({ tenantId: beta.id, name: 'Beta', sourceType: 'rss', url: 'https://example.com/beta.xml', agentManaged: true });
+    const budget = { perTenantPerDay: 1, serviceTotalPerDay: 2 };
+
+    const first = await repo.enqueueSourceFetch({ tenantId: alpha.id, sourceId: alphaSource.id, agentRunBudget: budget });
+    await repo.markJobCompleted(first.jobId, {});
+    expect(await repo.enqueueSourceFetch({ tenantId: alpha.id, sourceId: alphaSource.id, agentRunBudget: budget })).toMatchObject({ limited: 'tenant_daily' });
+
+    const second = await repo.enqueueSourceFetch({ tenantId: beta.id, sourceId: betaSource.id, agentRunBudget: budget });
+    await repo.markJobCompleted(second.jobId, {});
+    const betaSecond = await repo.enqueueSourceFetch({ tenantId: beta.id, sourceId: betaSource.id, agentRunBudget: { perTenantPerDay: 2, serviceTotalPerDay: 2 } });
+    expect(betaSecond).toMatchObject({ limited: 'service_daily' });
+  });
+
   it('claims each queued job once under concurrent claim calls', async () => {
     const repo = new MemorySignalRepository();
     const tenant = await repo.upsertTenant({ slug: 'pl', name: 'Pragmatic Leaders' });

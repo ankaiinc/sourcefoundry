@@ -2,6 +2,7 @@ import { fetchDiscoveryEntries, isActionableLinkedInUrl } from './ingest/discove
 import { entryPayload, parseFeed, sourceItemHash } from './ingest/rss.js';
 import type { SignalRepository } from './repository.js';
 import { scoreEntry } from './scoring.js';
+import { safeFetch } from './safe-fetch.js';
 import type { JsonRecord, SignalJob, SignalSource } from './types.js';
 
 export const SIGNAL_JOB_TYPES = ['fetch_source'];
@@ -11,6 +12,7 @@ export interface PipelineOptions {
   maxAttempts: number;
   staleJobMinutes: number;
   maxAgentManagedRunsPerDay?: number;
+  maxAgentManagedRunsPerTenantPerDay?: number;
   now?: Date;
   fetchFn?: typeof fetch;
 }
@@ -22,7 +24,7 @@ export interface TickResult {
 
 export async function scheduleDueSources(
   repo: SignalRepository,
-  options: Pick<PipelineOptions, 'maxDueSources' | 'maxAgentManagedRunsPerDay'> & { now?: Date },
+  options: Pick<PipelineOptions, 'maxDueSources' | 'maxAgentManagedRunsPerDay' | 'maxAgentManagedRunsPerTenantPerDay'> & { now?: Date },
 ): Promise<TickResult> {
   const now = options.now ?? new Date();
   const sources = await repo.listDueSources(options.maxDueSources, now);
@@ -35,17 +37,21 @@ export async function scheduleDueSources(
   )));
 
   for (const source of sources) {
-    if (source.agentManaged && agentManagedRuns >= maxAgentManagedRunsPerDay) {
-      agentManagedSkipped++;
-      continue;
-    }
     const result = await repo.enqueueSourceFetch({
       tenantId: source.tenantId,
       sourceId: source.id,
       priority: sourcePriority(source),
       runAfter: now.toISOString(),
+      ...(source.agentManaged ? {
+        agentRunBudget: {
+          perTenantPerDay: options.maxAgentManagedRunsPerTenantPerDay ?? maxAgentManagedRunsPerDay,
+          serviceTotalPerDay: maxAgentManagedRunsPerDay,
+        },
+      } : {}),
     });
-    if (result.created) {
+    if (result.limited) {
+      agentManagedSkipped++;
+    } else if (result.created) {
       enqueued++;
       if (source.agentManaged) agentManagedRuns++;
     }
@@ -70,7 +76,7 @@ export async function drainOnce(
     return { itemsProcessed: 0, detail: { claimed: 0 } };
   }
 
-  return executeClaimedJob(repo, job, options.fetchFn ?? fetch, options.maxAttempts);
+  return executeClaimedJob(repo, job, options.fetchFn ?? safeFetch, options.maxAttempts);
 }
 
 export async function drainJobOnce(
@@ -83,7 +89,7 @@ export async function drainJobOnce(
     return { itemsProcessed: 0, detail: { claimed: 0, jobId } };
   }
 
-  return executeClaimedJob(repo, job, options.fetchFn ?? fetch, options.maxAttempts);
+  return executeClaimedJob(repo, job, options.fetchFn ?? safeFetch, options.maxAttempts);
 }
 
 async function executeClaimedJob(
