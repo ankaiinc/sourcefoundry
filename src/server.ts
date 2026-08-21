@@ -5,6 +5,14 @@ import { PostgresSourceFoundryRepository } from './postgres-repository.js';
 import { validateDiscoverySourceConfiguration } from './ingest/discovery.js';
 import { drainJobOnce } from './pipeline.js';
 import {
+  agentGuide,
+  agentServiceDescriptor,
+  openApiDocument,
+  SOURCEFOUNDRY_AGENT_GUIDE_PATH,
+  SOURCEFOUNDRY_DISCOVERY_PATH,
+  SOURCEFOUNDRY_OPENAPI_PATH,
+} from './agent-discovery.js';
+import {
   parsePublicSignalsResponse,
   SOURCEFOUNDRY_SCHEMA_VERSION,
   SOURCEFOUNDRY_SIGNAL_STATUSES,
@@ -19,6 +27,18 @@ const server = http.createServer(async (req, res) => {
   try {
     if (!req.url) return send(res, 400, { error: 'missing url' });
     const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+
+    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === SOURCEFOUNDRY_DISCOVERY_PATH)) {
+      return send(res, 200, agentServiceDescriptor(config));
+    }
+
+    if (req.method === 'GET' && url.pathname === SOURCEFOUNDRY_OPENAPI_PATH) {
+      return send(res, 200, openApiDocument(config));
+    }
+
+    if (req.method === 'GET' && url.pathname === SOURCEFOUNDRY_AGENT_GUIDE_PATH) {
+      return sendText(res, 200, agentGuide(config));
+    }
 
     if (url.pathname === '/health') {
       return send(res, 200, {
@@ -43,17 +63,26 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    if (!authorize(req)) {
-      return sendError(res, 401, 'unauthorized', 'Unauthorized', false);
-    }
-
     if (req.method === 'GET' && url.pathname === '/v1/meta') {
       return send(res, 200, {
         schemaVersion: SOURCEFOUNDRY_SCHEMA_VERSION,
         release: config.releaseSha,
         service: 'sourcefoundry',
         capabilities: ['signals:list', 'sources:list', 'sources:create', 'ingest:enqueue', 'jobs:run-once'],
+        authentication: {
+          type: 'http-bearer',
+          environmentVariable: 'SOURCEFOUNDRY_API_TOKEN',
+          requiredFor: ['tenant and source configuration', 'ingestion', 'signal retrieval'],
+        },
+        documentation: {
+          openapi: `${config.publicBaseUrl}${SOURCEFOUNDRY_OPENAPI_PATH}`,
+          agentGuide: `${config.publicBaseUrl}${SOURCEFOUNDRY_AGENT_GUIDE_PATH}`,
+        },
       });
+    }
+
+    if (!authorize(req)) {
+      return sendError(res, 401, 'unauthorized', 'Unauthorized', false);
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/tenants') {
@@ -192,6 +221,16 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
     'x-sourcefoundry-release': config.releaseSha,
   });
   res.end(JSON.stringify(body));
+}
+
+function sendText(res: http.ServerResponse, status: number, body: string): void {
+  res.writeHead(status, {
+    'content-type': 'text/markdown; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
+    'x-sourcefoundry-release': config.releaseSha,
+  });
+  res.end(body);
 }
 
 function sendError(

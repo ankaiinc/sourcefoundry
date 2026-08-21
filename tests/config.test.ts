@@ -19,6 +19,22 @@ describe('SourceFoundry runtime configuration', () => {
     }).releaseSha).toBe('abc123');
   });
 
+  it('publishes an HTTPS canonical endpoint in production', () => {
+    expect(loadConfig({
+      NODE_ENV: 'production',
+      SOURCEFOUNDRY_DATABASE_URL: 'postgres://db',
+      SOURCEFOUNDRY_RELEASE_SHA: 'a'.repeat(40),
+      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'https://sources.4agents.fyi/',
+    }).publicBaseUrl).toBe('https://sources.4agents.fyi');
+
+    expect(() => loadConfig({
+      NODE_ENV: 'production',
+      SOURCEFOUNDRY_DATABASE_URL: 'postgres://db',
+      SOURCEFOUNDRY_RELEASE_SHA: 'a'.repeat(40),
+      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'http://sources.4agents.fyi',
+    })).toThrow('must use HTTPS');
+  });
+
   it('requires an exact release SHA in production', () => {
     expect(() => loadConfig({
       NODE_ENV: 'production',
@@ -30,6 +46,7 @@ describe('SourceFoundry runtime configuration', () => {
       NODE_ENV: 'production',
       SOURCEFOUNDRY_DATABASE_URL: 'postgres://db',
       SOURCEFOUNDRY_RELEASE_SHA: 'a'.repeat(40),
+      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'https://sources.4agents.fyi',
     }).releaseSha).toBe('a'.repeat(40));
   });
 });
