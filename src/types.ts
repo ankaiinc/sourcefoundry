@@ -9,6 +9,15 @@ export interface SignalTenant {
   config: JsonRecord;
 }
 
+export interface AgentCredential {
+  id: string;
+  tenantId: string;
+  label: string;
+  tokenPrefix: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
 export interface SignalSource {
   id: string;
   tenantId: string;
@@ -23,6 +32,7 @@ export interface SignalSource {
   etag?: string | null;
   lastModified?: string | null;
   failureCount: number;
+  agentManaged?: boolean;
   metadata: JsonRecord;
 }
 
@@ -178,6 +188,9 @@ export interface PublicSignalsResponse {
 export type SourceFoundryErrorCode =
   | 'bad_request'
   | 'unauthorized'
+  | 'forbidden'
+  | 'conflict'
+  | 'rate_limited'
   | 'not_found'
   | 'not_ready'
   | 'contract_violation'

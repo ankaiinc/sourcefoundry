@@ -37,8 +37,20 @@ describe('signal pipeline', () => {
     const first = await scheduleDueSources(repo, { maxDueSources: 10 });
     const second = await scheduleDueSources(repo, { maxDueSources: 10 });
 
-    expect(first.detail).toEqual({ dueSources: 1, enqueued: 1, alreadyActive: 0 });
-    expect(second.detail).toEqual({ dueSources: 1, enqueued: 0, alreadyActive: 1 });
+    expect(first.detail).toMatchObject({ dueSources: 1, enqueued: 1, alreadyActive: 0 });
+    expect(second.detail).toMatchObject({ dueSources: 1, enqueued: 0, alreadyActive: 1 });
+    expect(repo.jobs.size).toBe(1);
+  });
+
+  it('caps scheduled work across autonomous sources', async () => {
+    const repo = new MemorySignalRepository();
+    const tenant = await repo.upsertTenant({ slug: 'autonomous', name: 'Autonomous' });
+    await repo.createSource({ tenantId: tenant.id, name: 'One', sourceType: 'rss', url: 'https://example.com/one.xml', agentManaged: true });
+    await repo.createSource({ tenantId: tenant.id, name: 'Two', sourceType: 'rss', url: 'https://example.com/two.xml', agentManaged: true });
+
+    const result = await scheduleDueSources(repo, { maxDueSources: 10, maxAgentManagedRunsPerDay: 1 });
+
+    expect(result.detail).toMatchObject({ dueSources: 2, enqueued: 1, agentManagedSkipped: 1, agentManagedRuns: 1 });
     expect(repo.jobs.size).toBe(1);
   });
 

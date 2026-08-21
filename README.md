@@ -79,11 +79,19 @@ discover its tool contract without a token:
 - `GET /agent.md` — the concise operating guide for an autonomous agent.
 - `GET /v1/meta` — public capability discovery.
 
-To use data or configure sources, inject `SOURCEFOUNDRY_API_TOKEN` into the
-agent runtime's secret store and send it as a Bearer token. An agent can then
-upsert a tenant, upsert its sources, enqueue deduplicated fetches, and consume
-normalized signals. Source configuration is idempotent by tenant and URL, so a
-safe retry updates the intended source rather than creating another one.
+An agent can start without a pre-provisioned account: `POST
+/v1/agent-enrollments` with a unique workspace slug and name returns a
+tenant-scoped `SOURCEFOUNDRY_API_TOKEN` exactly once. Store it in the runtime
+secret store, then use it as a Bearer token to configure that workspace's
+sources, enqueue deduplicated fetches, and consume normalized signals. The
+agent cannot inspect another workspace or run provider work directly.
+
+Autonomous workspaces are intentionally bounded: at most three sources, a
+12-hour minimum fetch interval, ten results per fetch, and a shared daily job
+budget. They may use RSS/Atom feeds or the hosted Tavily, Exa, and Serper
+adapters; provider secrets remain internal. Source configuration is idempotent
+by tenant and URL, so a safe retry updates the intended source rather than
+creating another one.
 
 SourceFoundry owns provider keys and spend policy. Agents must never put a
 Tavily, Serper, Exa, Firecrawl, or other provider credential into a request,
@@ -242,6 +250,7 @@ SOURCEFOUNDRY_API_TOKEN=...
 SOURCEFOUNDRY_PORT=8080
 SOURCEFOUNDRY_WORKER_ENABLED=1
 SOURCEFOUNDRY_RELEASE_SHA=<full git SHA injected by the image build>
+SOURCEFOUNDRY_SELF_SERVICE_ENABLED=1 # enables autonomous enrollment
 FIRECRAWL_API_KEY=... # optional, only for Firecrawl-backed discovery sources
 TAVILY_API_KEY=... # optional, only for Tavily-backed discovery sources
 EXA_API_KEY=... # optional, only for Exa-backed discovery sources

@@ -1,5 +1,6 @@
 import type { SignalRepository } from '../repository.js';
 import type {
+  AgentCredential,
   CandidateInput,
   EnqueueSourceJobInput,
   FetchAttemptInput,
@@ -28,6 +29,7 @@ interface MemoryJob extends SignalJob {
 
 export class MemorySignalRepository implements SignalRepository {
   readonly tenants = new Map<string, SignalTenant>();
+  readonly agentCredentials = new Map<string, AgentCredential & { tokenHash: string }>();
   readonly sources = new Map<string, SignalSource>();
   readonly jobs = new Map<string, MemoryJob>();
   readonly items = new Map<string, SourceItem>();
@@ -57,6 +59,48 @@ export class MemorySignalRepository implements SignalRepository {
     return tenant;
   }
 
+  async createAutonomousTenant(input: { slug: string; name: string }): Promise<SignalTenant | null> {
+    if (await this.getTenantBySlug(input.slug)) return null;
+    return this.upsertTenant({ ...input, config: { autonomous: true } });
+  }
+
+  async getTenantBySlug(slug: string): Promise<SignalTenant | null> {
+    return Array.from(this.tenants.values()).find((tenant) => tenant.slug === slug) ?? null;
+  }
+
+  async getTenantById(tenantId: string): Promise<SignalTenant | null> {
+    return this.tenants.get(tenantId) ?? null;
+  }
+
+  async createAgentCredential(input: {
+    tenantId: string;
+    label: string;
+    tokenHash: string;
+    tokenPrefix: string;
+  }): Promise<AgentCredential> {
+    const credential: AgentCredential & { tokenHash: string } = {
+      id: this.id('credential'),
+      tenantId: input.tenantId,
+      label: input.label,
+      tokenHash: input.tokenHash,
+      tokenPrefix: input.tokenPrefix,
+      createdAt: new Date().toISOString(),
+      revokedAt: null,
+    };
+    this.agentCredentials.set(credential.id, credential);
+    return credential;
+  }
+
+  async findActiveAgentCredential(tokenHash: string): Promise<AgentCredential | null> {
+    return Array.from(this.agentCredentials.values()).find(
+      (credential) => credential.tokenHash === tokenHash && credential.revokedAt === null,
+    ) ?? null;
+  }
+
+  async countAgentCredentialsSince(since: Date): Promise<number> {
+    return Array.from(this.agentCredentials.values()).filter((credential) => Date.parse(credential.createdAt) >= since.getTime()).length;
+  }
+
   async createSource(input: {
     tenantId: string;
     name: string;
@@ -66,6 +110,7 @@ export class MemorySignalRepository implements SignalRepository {
     intervalMinutes?: number;
     maxItemsPerFetch?: number;
     timeoutSeconds?: number;
+    agentManaged?: boolean;
     metadata?: JsonRecord;
   }): Promise<SignalSource> {
     for (const source of this.sources.values()) {
@@ -78,6 +123,7 @@ export class MemorySignalRepository implements SignalRepository {
           intervalMinutes: input.intervalMinutes ?? 60,
           maxItemsPerFetch: input.maxItemsPerFetch ?? 30,
           timeoutSeconds: input.timeoutSeconds ?? 20,
+          agentManaged: source.agentManaged || input.agentManaged === true,
           metadata: input.metadata ?? {},
         };
         this.sources.set(updated.id, updated);
@@ -98,10 +144,19 @@ export class MemorySignalRepository implements SignalRepository {
       etag: null,
       lastModified: null,
       failureCount: 0,
+      agentManaged: input.agentManaged === true,
       metadata: input.metadata ?? {},
     };
     this.sources.set(source.id, source);
     return source;
+  }
+
+  async getSourceByTenantAndUrl(tenantId: string, url: string): Promise<SignalSource | null> {
+    return Array.from(this.sources.values()).find((source) => source.tenantId === tenantId && source.url === url) ?? null;
+  }
+
+  async countSourcesForTenant(tenantId: string): Promise<number> {
+    return Array.from(this.sources.values()).filter((source) => source.tenantId === tenantId).length;
   }
 
   async listDueSources(limit: number): Promise<SignalSource[]> {
@@ -155,6 +210,15 @@ export class MemorySignalRepository implements SignalRepository {
       updatedAt: new Date().toISOString(),
     });
     return { jobId: id, created: true };
+  }
+
+  async countAgentManagedJobsSince(since: Date): Promise<number> {
+    return Array.from(this.jobs.values()).filter((job) => {
+      const source = job.entityId ? this.sources.get(job.entityId) : undefined;
+      return job.jobType === 'fetch_source'
+        && source?.agentManaged === true
+        && Date.parse(job.updatedAt) >= since.getTime();
+    }).length;
   }
 
   async claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null> {

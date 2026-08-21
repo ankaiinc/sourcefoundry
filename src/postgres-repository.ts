@@ -1,5 +1,6 @@
 import pg from 'pg';
 import type {
+  AgentCredential,
   CandidateInput,
   EnqueueSourceJobInput,
   FetchAttemptInput,
@@ -12,7 +13,7 @@ import type {
   SourceItem,
   SourceItemInput,
 } from './types.js';
-import { objectValue, toJob, toSource, toTenant, type SignalRepository } from './repository.js';
+import { objectValue, toAgentCredential, toJob, toSource, toTenant, type SignalRepository } from './repository.js';
 import { aggregatePublicSignals, signalKeyFor } from './signals.js';
 import { conversationFromPayload } from './conversation.js';
 
@@ -51,6 +52,62 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     return toTenant(requiredRow(result.rows, 'tenant'));
   }
 
+  async getTenantBySlug(slug: string): Promise<SignalTenant | null> {
+    const result = await this.pool.query('SELECT * FROM sourcefoundry_tenants WHERE slug = $1 LIMIT 1', [slug]);
+    return result.rows[0] ? toTenant(result.rows[0]) : null;
+  }
+
+  async createAutonomousTenant(input: { slug: string; name: string }): Promise<SignalTenant | null> {
+    const result = await this.pool.query(
+      `
+      INSERT INTO sourcefoundry_tenants (slug, name, config)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (slug) DO NOTHING
+      RETURNING *
+      `,
+      [input.slug, input.name, { autonomous: true }],
+    );
+    return result.rows[0] ? toTenant(result.rows[0]) : null;
+  }
+
+  async getTenantById(tenantId: string): Promise<SignalTenant | null> {
+    const result = await this.pool.query('SELECT * FROM sourcefoundry_tenants WHERE id = $1 LIMIT 1', [tenantId]);
+    return result.rows[0] ? toTenant(result.rows[0]) : null;
+  }
+
+  async createAgentCredential(input: {
+    tenantId: string;
+    label: string;
+    tokenHash: string;
+    tokenPrefix: string;
+  }): Promise<AgentCredential> {
+    const result = await this.pool.query(
+      `
+      INSERT INTO sourcefoundry_agent_credentials (tenant_id, label, token_hash, token_prefix)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+      `,
+      [input.tenantId, input.label, input.tokenHash, input.tokenPrefix],
+    );
+    return toAgentCredential(requiredRow(result.rows, 'agent credential'));
+  }
+
+  async findActiveAgentCredential(tokenHash: string): Promise<AgentCredential | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM sourcefoundry_agent_credentials WHERE token_hash = $1 AND revoked_at IS NULL LIMIT 1',
+      [tokenHash],
+    );
+    return result.rows[0] ? toAgentCredential(result.rows[0]) : null;
+  }
+
+  async countAgentCredentialsSince(since: Date): Promise<number> {
+    const result = await this.pool.query(
+      'SELECT count(*)::int AS count FROM sourcefoundry_agent_credentials WHERE created_at >= $1',
+      [since.toISOString()],
+    );
+    return Number(requiredRow(result.rows, 'agent credential count').count ?? 0);
+  }
+
   async createSource(input: {
     tenantId: string;
     name: string;
@@ -60,15 +117,16 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     intervalMinutes?: number;
     maxItemsPerFetch?: number;
     timeoutSeconds?: number;
+    agentManaged?: boolean;
     metadata?: JsonRecord;
   }): Promise<SignalSource> {
     const result = await this.pool.query(
       `
       INSERT INTO sourcefoundry_sources (
         tenant_id, name, source_type, url, reliability, interval_minutes,
-        max_items_per_fetch, timeout_seconds, metadata
+        max_items_per_fetch, timeout_seconds, agent_managed, metadata
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (tenant_id, url)
       DO UPDATE SET
         name = EXCLUDED.name,
@@ -77,6 +135,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
         interval_minutes = EXCLUDED.interval_minutes,
         max_items_per_fetch = EXCLUDED.max_items_per_fetch,
         timeout_seconds = EXCLUDED.timeout_seconds,
+        agent_managed = sourcefoundry_sources.agent_managed OR EXCLUDED.agent_managed,
         metadata = EXCLUDED.metadata,
         updated_at = now()
       RETURNING *
@@ -90,10 +149,27 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
         input.intervalMinutes ?? 60,
         input.maxItemsPerFetch ?? 30,
         input.timeoutSeconds ?? 20,
+        input.agentManaged ?? false,
         input.metadata ?? {},
       ],
     );
     return toSource(requiredRow(result.rows, 'source'));
+  }
+
+  async getSourceByTenantAndUrl(tenantId: string, url: string): Promise<SignalSource | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM sourcefoundry_sources WHERE tenant_id = $1 AND url = $2 LIMIT 1',
+      [tenantId, url],
+    );
+    return result.rows[0] ? toSource(result.rows[0]) : null;
+  }
+
+  async countSourcesForTenant(tenantId: string): Promise<number> {
+    const result = await this.pool.query(
+      'SELECT count(*)::int AS count FROM sourcefoundry_sources WHERE tenant_id = $1',
+      [tenantId],
+    );
+    return Number(requiredRow(result.rows, 'source count').count ?? 0);
   }
 
   async listDueSources(limit: number, now: Date): Promise<SignalSource[]> {
@@ -185,6 +261,21 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     } finally {
       client.release();
     }
+  }
+
+  async countAgentManagedJobsSince(since: Date): Promise<number> {
+    const result = await this.pool.query(
+      `
+      SELECT count(*)::int AS count
+      FROM sourcefoundry_jobs jobs
+      JOIN sourcefoundry_sources sources ON sources.id = jobs.entity_id
+      WHERE jobs.job_type = 'fetch_source'
+        AND sources.agent_managed = true
+        AND jobs.created_at >= $1
+      `,
+      [since.toISOString()],
+    );
+    return Number(requiredRow(result.rows, 'agent-managed job count').count ?? 0);
   }
 
   async claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null> {

@@ -9,6 +9,14 @@ export interface SourceFoundryConfig {
   workerConcurrency: number;
   staleJobMinutes: number;
   maxAttempts: number;
+  selfService: {
+    enabled: boolean;
+    maxSources: number;
+    minIntervalMinutes: number;
+    maxItemsPerFetch: number;
+    maxEnrollmentsPerDay: number;
+    maxRunsPerDay: number;
+  };
 }
 
 export function loadConfig(
@@ -36,6 +44,14 @@ export function loadConfig(
     workerConcurrency: intFromEnv(env.SOURCEFOUNDRY_WORKER_CONCURRENCY, 3),
     staleJobMinutes: intFromEnv(env.SOURCEFOUNDRY_STALE_JOB_MINUTES, 30),
     maxAttempts: intFromEnv(env.SOURCEFOUNDRY_MAX_ATTEMPTS, 5),
+    selfService: {
+      enabled: env.SOURCEFOUNDRY_SELF_SERVICE_ENABLED === '1',
+      maxSources: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_SOURCES, 3),
+      minIntervalMinutes: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MIN_INTERVAL_MINUTES, 720),
+      maxItemsPerFetch: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_ITEMS_PER_FETCH, 10),
+      maxEnrollmentsPerDay: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_ENROLLMENTS_PER_DAY, 50),
+      maxRunsPerDay: intFromEnv(env.SOURCEFOUNDRY_SELF_SERVICE_MAX_RUNS_PER_DAY, 24),
+    },
   };
 }
 

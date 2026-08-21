@@ -12,6 +12,9 @@ import {
   SOURCEFOUNDRY_DISCOVERY_PATH,
   SOURCEFOUNDRY_OPENAPI_PATH,
 } from './agent-discovery.js';
+import { createAgentToken, startOfUtcDay, tokenHash, tokenPrefix, validateAgentSourcePolicy } from './agent-access.js';
+import { landingPage } from './landing.js';
+import type { AgentCredential, SignalSource } from './types.js';
 import {
   parsePublicSignalsResponse,
   SOURCEFOUNDRY_SCHEMA_VERSION,
@@ -28,7 +31,11 @@ const server = http.createServer(async (req, res) => {
     if (!req.url) return send(res, 400, { error: 'missing url' });
     const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
 
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === SOURCEFOUNDRY_DISCOVERY_PATH)) {
+    if (req.method === 'GET' && url.pathname === '/') {
+      return sendHtml(res, 200, landingPage(config.publicBaseUrl));
+    }
+
+    if (req.method === 'GET' && url.pathname === SOURCEFOUNDRY_DISCOVERY_PATH) {
       return send(res, 200, agentServiceDescriptor(config));
     }
 
@@ -74,6 +81,13 @@ const server = http.createServer(async (req, res) => {
           environmentVariable: 'SOURCEFOUNDRY_API_TOKEN',
           requiredFor: ['tenant and source configuration', 'ingestion', 'signal retrieval'],
         },
+        selfService: {
+          enrollment: `${config.publicBaseUrl}/v1/agent-enrollments`,
+          enabled: config.selfService.enabled,
+          sourceLimit: config.selfService.maxSources,
+          minimumIntervalMinutes: config.selfService.minIntervalMinutes,
+          maximumItemsPerFetch: config.selfService.maxItemsPerFetch,
+        },
         documentation: {
           openapi: `${config.publicBaseUrl}${SOURCEFOUNDRY_OPENAPI_PATH}`,
           agentGuide: `${config.publicBaseUrl}${SOURCEFOUNDRY_AGENT_GUIDE_PATH}`,
@@ -81,11 +95,17 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    if (!authorize(req)) {
+    if (req.method === 'POST' && url.pathname === '/v1/agent-enrollments') {
+      return enrollAgent(req, res);
+    }
+
+    const access = await authenticate(req);
+    if (!access) {
       return sendError(res, 401, 'unauthorized', 'Unauthorized', false);
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/tenants') {
+      if (access.kind === 'agent') throw new ApiError(403, 'forbidden', 'Agent workspaces are created through /v1/agent-enrollments');
       const body = await readJson(req);
       const tenant = await repo.upsertTenant({
         slug: requiredString(body.slug, 'slug'),
@@ -108,6 +128,29 @@ const server = http.createServer(async (req, res) => {
       assignOptionalNumber(sourceInput, 'intervalMinutes', body.intervalMinutes, { minimum: 1, maximum: 10_080, integer: true });
       assignOptionalNumber(sourceInput, 'maxItemsPerFetch', body.maxItemsPerFetch, { minimum: 1, maximum: 100, integer: true });
       assignOptionalNumber(sourceInput, 'timeoutSeconds', body.timeoutSeconds, { minimum: 1, maximum: 300, integer: true });
+
+      if (access.kind === 'agent') {
+        assertAgentTenant(access.credential, sourceInput.tenantId);
+        const existing = await repo.getSourceByTenantAndUrl(sourceInput.tenantId, sourceInput.url);
+        if (!existing && await repo.countSourcesForTenant(sourceInput.tenantId) >= config.selfService.maxSources) {
+          throw new ApiError(429, 'rate_limited', `Autonomous workspaces may configure at most ${config.selfService.maxSources} sources`);
+        }
+        try {
+          validateAgentSourcePolicy({
+            sourceType: sourceInput.sourceType,
+            url: sourceInput.url,
+            intervalMinutes: sourceInput.intervalMinutes ?? 60,
+            maxItemsPerFetch: sourceInput.maxItemsPerFetch ?? 30,
+            metadata: sourceInput.metadata ?? {},
+          }, {
+            minIntervalMinutes: config.selfService.minIntervalMinutes,
+            maxItemsPerFetch: config.selfService.maxItemsPerFetch,
+          });
+        } catch (error) {
+          throw new ApiError(400, 'bad_request', error instanceof Error ? error.message : String(error));
+        }
+        sourceInput.agentManaged = true;
+      }
 
       validateDiscoverySourceConfiguration({
         id: 'pending',
@@ -132,6 +175,7 @@ const server = http.createServer(async (req, res) => {
       const tenantSlug = url.searchParams.get('tenant') ?? undefined;
       const tenantId = url.searchParams.get('tenantId') ?? undefined;
       if (!tenantSlug && !tenantId) throw new ApiError(400, 'bad_request', 'tenant or tenantId is required');
+      await assertTenantQueryAccess(access, tenantSlug, tenantId);
       const sources = await repo.listSources({ ...(tenantSlug ? { tenantSlug } : {}), ...(tenantId ? { tenantId } : {}) });
       return send(res, 200, versioned({ sources }));
     }
@@ -139,6 +183,7 @@ const server = http.createServer(async (req, res) => {
     const sourceMatch = url.pathname.match(/^\/v1\/sources\/([0-9a-f-]{36})$/i);
     if (req.method === 'GET' && sourceMatch) {
       const source = await repo.getSource(sourceMatch[1]!);
+      if (source) assertSourceAccess(access, source);
       return source ? send(res, 200, versioned({ source })) : sendError(res, 404, 'not_found', 'Source not found', false);
     }
 
@@ -149,6 +194,11 @@ const server = http.createServer(async (req, res) => {
         sourceId: requiredString(body.sourceId, 'sourceId'),
       };
       assignOptionalNumber(enqueueInput, 'priority', body.priority, { minimum: -100, maximum: 100, integer: true });
+      assertAccessTenantId(access, enqueueInput.tenantId);
+      const source = await repo.getSource(enqueueInput.sourceId);
+      if (!source || source.tenantId !== enqueueInput.tenantId) {
+        throw new ApiError(404, 'not_found', 'Source not found');
+      }
 
       const enqueueResult = await repo.enqueueSourceFetch(enqueueInput);
       return send(res, 202, versioned(enqueueResult));
@@ -156,6 +206,7 @@ const server = http.createServer(async (req, res) => {
 
     const runJobMatch = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]{36})\/run-once$/i);
     if (req.method === 'POST' && runJobMatch) {
+      if (access.kind === 'agent') throw new ApiError(403, 'forbidden', 'Autonomous workspaces enqueue work; they do not run jobs directly');
       const result = await drainJobOnce(repo, runJobMatch[1]!, { maxAttempts: config.maxAttempts });
       if (result.detail.claimed === 0) {
         throw new ApiError(409, 'bad_request', 'Job is not currently claimable');
@@ -167,6 +218,7 @@ const server = http.createServer(async (req, res) => {
       const tenant = url.searchParams.get('tenant') ?? undefined;
       const tenantId = url.searchParams.get('tenantId') ?? undefined;
       if (!tenant && !tenantId) throw new ApiError(400, 'bad_request', 'tenant or tenantId is required');
+      await assertTenantQueryAccess(access, tenant, tenantId);
       const limit = Number.parseInt(url.searchParams.get('limit') ?? '20', 10);
       const statuses = (url.searchParams.get('statuses') ?? 'published,approved')
         .split(',')
@@ -206,11 +258,71 @@ server.listen(config.port, () => {
   console.log(`sourcefoundry api listening on ${config.port}`);
 });
 
-function authorize(req: http.IncomingMessage): boolean {
+async function enrollAgent(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (!config.selfService.enabled) throw new ApiError(403, 'forbidden', 'Autonomous enrollment is not enabled');
+  if (await repo.countAgentCredentialsSince(startOfUtcDay()) >= config.selfService.maxEnrollmentsPerDay) {
+    throw new ApiError(429, 'rate_limited', 'Autonomous enrollment capacity is currently full; retry tomorrow');
+  }
+  const body = await readJson(req);
+  const slug = requiredSlug(body.slug);
+  const name = requiredString(body.name, 'name');
+  const label = requiredString(body.agentLabel ?? 'autonomous-agent', 'agentLabel');
+  const tenant = await repo.createAutonomousTenant({ slug, name });
+  if (!tenant) throw new ApiError(409, 'conflict', 'That workspace slug is already claimed');
+  const token = createAgentToken();
+  const credential = await repo.createAgentCredential({
+    tenantId: tenant.id,
+    label,
+    tokenHash: tokenHash(token),
+    tokenPrefix: tokenPrefix(token),
+  });
+  return send(res, 201, versioned({
+    tenant,
+    credential: { id: credential.id, label: credential.label, tokenPrefix: credential.tokenPrefix },
+    token,
+    tokenDelivery: 'This token is shown exactly once. Store it in the agent runtime secret store as SOURCEFOUNDRY_API_TOKEN.',
+    baseUrl: config.publicBaseUrl,
+    next: {
+      openapi: `${config.publicBaseUrl}${SOURCEFOUNDRY_OPENAPI_PATH}`,
+      createSource: `${config.publicBaseUrl}/v1/sources`,
+      sourceLimit: config.selfService.maxSources,
+      minimumIntervalMinutes: config.selfService.minIntervalMinutes,
+      maximumItemsPerFetch: config.selfService.maxItemsPerFetch,
+    },
+  }));
+}
+
+type Access = { kind: 'operator' } | { kind: 'agent'; credential: AgentCredential };
+
+async function authenticate(req: http.IncomingMessage): Promise<Access | null> {
   const header = req.headers.authorization ?? '';
   const expected = Buffer.from(`Bearer ${config.apiToken}`);
   const received = Buffer.from(header);
-  return received.length === expected.length && timingSafeEqual(received, expected);
+  if (received.length === expected.length && timingSafeEqual(received, expected)) return { kind: 'operator' };
+  const token = header.startsWith('Bearer sfa_') ? header.slice('Bearer '.length) : '';
+  if (!token) return null;
+  const credential = await repo.findActiveAgentCredential(tokenHash(token));
+  return credential ? { kind: 'agent', credential } : null;
+}
+
+function assertAgentTenant(credential: AgentCredential, tenantId: string): void {
+  if (credential.tenantId !== tenantId) throw new ApiError(403, 'forbidden', 'This agent credential is scoped to a different workspace');
+}
+
+function assertAccessTenantId(access: Access, tenantId: string): void {
+  if (access.kind === 'agent') assertAgentTenant(access.credential, tenantId);
+}
+
+async function assertTenantQueryAccess(access: Access, tenantSlug?: string, tenantId?: string): Promise<void> {
+  if (access.kind === 'operator') return;
+  if (tenantId) return assertAgentTenant(access.credential, tenantId);
+  const tenant = tenantSlug ? await repo.getTenantBySlug(tenantSlug) : null;
+  if (!tenant) throw new ApiError(404, 'not_found', 'Tenant not found');
+  assertAgentTenant(access.credential, tenant.id);
+}
+
+function assertSourceAccess(access: Access, source: SignalSource): void {
+  if (access.kind === 'agent') assertAgentTenant(access.credential, source.tenantId);
 }
 
 function send(res: http.ServerResponse, status: number, body: unknown): void {
@@ -226,6 +338,16 @@ function send(res: http.ServerResponse, status: number, body: unknown): void {
 function sendText(res: http.ServerResponse, status: number, body: string): void {
   res.writeHead(status, {
     'content-type': 'text/markdown; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
+    'x-sourcefoundry-release': config.releaseSha,
+  });
+  res.end(body);
+}
+
+function sendHtml(res: http.ServerResponse, status: number, body: string): void {
+  res.writeHead(status, {
+    'content-type': 'text/html; charset=utf-8',
     'cache-control': 'no-store',
     'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
     'x-sourcefoundry-release': config.releaseSha,
@@ -272,6 +394,14 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
 function requiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim()) throw new ApiError(400, 'bad_request', `${field} is required`);
   return value.trim();
+}
+
+function requiredSlug(value: unknown): string {
+  const slug = requiredString(value, 'slug').toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/.test(slug)) {
+    throw new ApiError(400, 'bad_request', 'slug must be 3-63 lowercase letters, numbers, or hyphens');
+  }
+  return slug;
 }
 
 function sourceType(value: unknown): 'rss' | 'atom' | 'web' {

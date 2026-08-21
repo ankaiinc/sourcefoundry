@@ -25,6 +25,7 @@ async function run(): Promise<void> {
         maxDueSources: config.workerConcurrency,
         maxAttempts: config.maxAttempts,
         staleJobMinutes: config.staleJobMinutes,
+        maxAgentManagedRunsPerDay: config.selfService.maxRunsPerDay,
       }),
     );
     console.log('sourcefoundry worker tick ok', result);

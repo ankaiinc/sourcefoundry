@@ -10,6 +10,7 @@ export interface PipelineOptions {
   maxDueSources: number;
   maxAttempts: number;
   staleJobMinutes: number;
+  maxAgentManagedRunsPerDay?: number;
   now?: Date;
   fetchFn?: typeof fetch;
 }
@@ -21,27 +22,39 @@ export interface TickResult {
 
 export async function scheduleDueSources(
   repo: SignalRepository,
-  options: Pick<PipelineOptions, 'maxDueSources'> & { now?: Date },
+  options: Pick<PipelineOptions, 'maxDueSources' | 'maxAgentManagedRunsPerDay'> & { now?: Date },
 ): Promise<TickResult> {
   const now = options.now ?? new Date();
   const sources = await repo.listDueSources(options.maxDueSources, now);
   let enqueued = 0;
   let alreadyActive = 0;
+  let agentManagedSkipped = 0;
+  const maxAgentManagedRunsPerDay = options.maxAgentManagedRunsPerDay ?? Number.POSITIVE_INFINITY;
+  let agentManagedRuns = await repo.countAgentManagedJobsSince(new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+  )));
 
   for (const source of sources) {
+    if (source.agentManaged && agentManagedRuns >= maxAgentManagedRunsPerDay) {
+      agentManagedSkipped++;
+      continue;
+    }
     const result = await repo.enqueueSourceFetch({
       tenantId: source.tenantId,
       sourceId: source.id,
       priority: sourcePriority(source),
       runAfter: now.toISOString(),
     });
-    if (result.created) enqueued++;
+    if (result.created) {
+      enqueued++;
+      if (source.agentManaged) agentManagedRuns++;
+    }
     else alreadyActive++;
   }
 
   return {
     itemsProcessed: enqueued,
-    detail: { dueSources: sources.length, enqueued, alreadyActive },
+    detail: { dueSources: sources.length, enqueued, alreadyActive, agentManagedSkipped, agentManagedRuns },
   };
 }
 
