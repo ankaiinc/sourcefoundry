@@ -12,7 +12,7 @@ afterEach(() => {
   else process.env.SERPER_API_KEY = originalSerper;
 });
 
-function source(provider: 'exa' | 'serper', url: string): SignalSource {
+function source(provider: 'exa' | 'serper' | 'github', url: string): SignalSource {
   return {
     id: `source-${provider}`,
     tenantId: 'tenant-1',
@@ -102,6 +102,43 @@ describe('typed search-provider adapters', () => {
       author: 'Product Desk',
       publishedAt: null,
       raw: { provider: 'serper', query: 'AI product evidence' },
+    });
+  });
+
+  it('discovers fresh public GitHub repositories without requiring a paid key', async () => {
+    delete process.env.GITHUB_TOKEN;
+    const calls: Array<{ url: URL; headers: Headers }> = [];
+    const githubSource = source('github', 'https://api.github.com/search/repositories');
+    githubSource.metadata.lookback_days = 21;
+    const result = await fetchDiscoveryEntries(
+      githubSource,
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: new URL(input.toString()), headers: new Headers(init?.headers) });
+        return new Response(JSON.stringify({ items: [{
+          full_name: 'builders/fresh-agent',
+          html_url: 'https://github.com/builders/fresh-agent',
+          description: 'An agent evaluation toolkit for product teams.',
+          stargazers_count: 321,
+          language: 'TypeScript',
+          created_at: '2026-08-20T10:00:00Z',
+          owner: { login: 'builders' },
+        }] }), { status: 200 });
+      }) as typeof fetch,
+      new AbortController().signal,
+    );
+
+    expect(calls[0]?.url.pathname).toBe('/search/repositories');
+    expect(calls[0]?.url.searchParams.get('q')).toMatch(/^AI product evidence created:>=\d{4}-\d{2}-\d{2}$/);
+    expect(calls[0]?.url.searchParams.get('per_page')).toBe('30');
+    expect(calls[0]?.headers.get('x-github-api-version')).toBe('2022-11-28');
+    expect(calls[0]?.headers.has('authorization')).toBe(false);
+    expect(result.entries[0]).toMatchObject({
+      title: 'builders/fresh-agent',
+      canonicalUrl: 'https://github.com/builders/fresh-agent',
+      summary: 'An agent evaluation toolkit for product teams. 321 GitHub stars. Primary language: TypeScript',
+      author: 'builders',
+      publishedAt: '2026-08-20T10:00:00.000Z',
+      raw: { provider: 'github', query: 'AI product evidence' },
     });
   });
 

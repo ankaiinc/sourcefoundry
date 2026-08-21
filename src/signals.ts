@@ -83,8 +83,8 @@ export function aggregatePublicSignals(signals: PublicSignal[], limit: number): 
       } satisfies PublicSignal;
     })
     .sort((left, right) =>
-      right.score - left.score ||
       right.generatedAt.localeCompare(left.generatedAt) ||
+      right.score - left.score ||
       left.aggregation.signalKey.localeCompare(right.aggregation.signalKey))
     .slice(0, Math.max(0, limit));
 }

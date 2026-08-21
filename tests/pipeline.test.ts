@@ -1,8 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { drainJobOnce, drainOnce, scheduleDueSources } from '../src/pipeline.js';
+import { aggregatePublicSignals } from '../src/signals.js';
 import { MemorySignalRepository } from '../src/testing/memory-repository.js';
+import type { PublicSignal } from '../src/types.js';
 
 describe('signal pipeline', () => {
+  it('keeps a fresh signal visible even when an older signal has a higher score', () => {
+    const signal = (id: string, score: number, generatedAt: string): PublicSignal => ({
+      schemaVersion: 1, id, tenantId: 'tenant-1', title: `Signal ${id} has a distinct title`,
+      summary: 'A complete source summary.', url: `https://example.com/${id}`, status: 'published',
+      score, tags: ['product'], generatedAt, publishedAt: generatedAt,
+      source: { id: `source-${id}`, name: 'Example', type: 'web', provider: 'exa', reliability: 0.9 },
+      provenance: { sourceItemId: `item-${id}`, canonicalUrl: `https://example.com/${id}`, fetchedAt: generatedAt, contentHash: id, author: null, query: null },
+      freshness: { publishedAt: generatedAt, fetchedAt: generatedAt, ageSeconds: 0 },
+      completeness: { title: true, summary: true, author: false, publishedAt: true },
+      failureState: { state: 'healthy', consecutiveFailures: 0, lastSuccessAt: generatedAt, lastFailureAt: null },
+      aggregation: { signalKey: '', observationCount: 1, sourceCount: 1, capped: false }, observations: [],
+    });
+    const visible = aggregatePublicSignals([
+      signal('old-high', 0.99, '2026-07-30T00:00:00Z'),
+      signal('new-lower', 0.72, '2026-08-21T00:00:00Z'),
+    ], 1);
+
+    expect(visible[0]?.id).toBe('new-lower');
+  });
   it('does not grow the queue when the scheduler sees the same active source again', async () => {
     const repo = new MemorySignalRepository();
     const tenant = await repo.upsertTenant({ slug: 'pl', name: 'Pragmatic Leaders' });
