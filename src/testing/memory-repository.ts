@@ -37,6 +37,8 @@ export class MemorySignalRepository implements SignalRepository {
 
   private sequence = 0;
 
+  async checkReadiness(): Promise<void> {}
+
   async upsertTenant(input: { slug: string; name: string; config?: JsonRecord }): Promise<SignalTenant> {
     for (const tenant of this.tenants.values()) {
       if (tenant.slug === input.slug) {

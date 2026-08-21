@@ -33,6 +33,10 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     await this.pool.end();
   }
 
+  async checkReadiness(): Promise<void> {
+    await this.pool.query('SELECT 1');
+  }
+
   async upsertTenant(input: { slug: string; name: string; config?: JsonRecord }): Promise<SignalTenant> {
     const result = await this.pool.query(
       `
@@ -471,7 +475,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
         title,
         summary,
         url: String(row.url),
-        status: String(row.status),
+        status: String(row.status) as PublicSignal['status'],
         score: Number(row.score ?? 0),
         tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
         generatedAt: requiredTimestamp(row.generated_at, 'generated_at'),

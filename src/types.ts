@@ -97,6 +97,8 @@ export interface CandidateInput {
   metadata: JsonRecord;
 }
 
+export type PublicSignalStatus = CandidateInput['status'];
+
 export interface SignalObservation {
   candidateId: string;
   title: string;
@@ -120,7 +122,7 @@ export interface PublicSignal {
   title: string;
   summary: string;
   url: string;
-  status: string;
+  status: PublicSignalStatus;
   score: number;
   tags: string[];
   generatedAt: string;
@@ -165,6 +167,30 @@ export interface PublicSignal {
     capped: boolean;
   };
   observations: SignalObservation[];
+}
+
+export interface PublicSignalsResponse {
+  schemaVersion: 1;
+  release: string;
+  signals: PublicSignal[];
+}
+
+export type SourceFoundryErrorCode =
+  | 'bad_request'
+  | 'unauthorized'
+  | 'not_found'
+  | 'not_ready'
+  | 'contract_violation'
+  | 'internal_error';
+
+export interface SourceFoundryErrorResponse {
+  schemaVersion: 1;
+  release: string;
+  error: {
+    code: SourceFoundryErrorCode;
+    message: string;
+    retryable: boolean;
+  };
 }
 
 export interface FetchAttemptInput {

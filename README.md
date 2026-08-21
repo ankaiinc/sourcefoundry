@@ -40,6 +40,34 @@ bundle. A source contributes at most one observation, each bundle retains at
 most three observations, and repetition never increases the representative
 candidate score.
 
+Every successful v1 response includes both `schemaVersion` and the immutable
+`release` SHA baked into the deployed image. Every error uses the same versioned
+envelope with a stable code and an explicit `retryable` flag. Consumers must
+reject an unsupported schema instead of treating it as an empty feed.
+
+The package also exports a zero-dependency typed client:
+
+```ts
+import { listSourceFoundrySignals } from 'sourcefoundry';
+
+const response = await listSourceFoundrySignals({
+  baseUrl: process.env.SOURCEFOUNDRY_URL!,
+  token: process.env.SOURCEFOUNDRY_API_TOKEN!,
+  tenant: 'pragmatic-leaders',
+  statuses: ['published', 'approved'],
+  limit: 30,
+});
+
+for (const signal of response.signals) {
+  console.log(signal.title, signal.source.provider, signal.provenance.canonicalUrl);
+}
+```
+
+The client validates the complete response at runtime before returning typed
+signals. HTTP failures remain HTTP failures; incompatible payloads raise a
+contract error. Neither failure is converted into an innocent-looking empty
+array.
+
 ## Runtime shape
 
 - API process: `src/server.ts`
@@ -50,6 +78,10 @@ candidate score.
 - Active fetch idempotency: one queued/running job per tenant and source. The
   production reconciliation command is dry-run by default; applying it cancels
   duplicate active jobs with an audit reason and installs the database guard.
+- `GET /health`: process liveness plus schema and release identity.
+- `GET /ready`: database connectivity plus schema and release identity. Fly
+  routes traffic only after this check passes.
+- `GET /v1/meta`: authenticated capability discovery for consumers.
 
 ```bash
 npm run reconcile:jobs
@@ -108,10 +140,41 @@ Example source metadata:
 }
 ```
 
-The discovery adapter accepts Firecrawl-like responses (`data`), Tavily-like
-responses (`results`), or simple JSON arrays. Set `FIRECRAWL_API_KEY`,
-`TAVILY_API_KEY`, or `SOURCEFOUNDRY_DISCOVERY_API_TOKEN` in the worker
-environment depending on the provider.
+The discovery adapter accepts Firecrawl, Tavily, Exa, and Serper responses, or
+simple JSON arrays. Every provider is normalized into the same typed source-item
+contract before ranking, deduplication, or delivery. Set `FIRECRAWL_API_KEY`,
+`TAVILY_API_KEY`, `EXA_API_KEY`, `SERPER_API_KEY`, or
+`SOURCEFOUNDRY_DISCOVERY_API_TOKEN` in the worker environment depending on the
+provider.
+
+Official search adapters keep provider choice behind SourceFoundry:
+
+- Tavily: `provider: "tavily"`, `url: "https://api.tavily.com/search"`.
+- Exa: `provider: "exa"`, `url: "https://api.exa.ai/search"`. The default is a
+  fast news search with bounded text extraction.
+- Serper: `provider: "serper"`, `url: "https://google.serper.dev/news"`.
+
+All three adapters cap a single query at ten results. Their keys are sent only
+to approved HTTPS provider endpoints; SourceFoundry rejects a mismatched URL
+before making a request. Provider-specific response fields never cross the
+SourceFoundry API boundary.
+
+Pragmatic Leaders has a repeatable, no-write provider plan in
+`npm run bootstrap:pl`. It retains free RSS, reduces the broken Tavily source
+from a 30-minute ten-query loop to two basic searches every 12 hours, and adds
+two bounded Exa and two bounded Serper searches at the same cadence. At
+published list prices the plan projects about $1.56 per month ($1.44 Exa,
+$0.12 Serper, and Tavily inside its 1,000-credit free tier), below the approved
+$5 ceiling. The confirmed form is explicit and idempotent:
+
+```bash
+npm run bootstrap:pl
+npm run bootstrap:pl -- --apply --confirm=configure-pragmatic-leaders-sources
+```
+
+The first command performs no mutation. The second upserts all source
+configuration and enqueues at most one active job for each source; the database
+uniqueness guard prevents schedule retries from manufacturing duplicate work.
 
 Official social discovery adapters use the same neutral candidate contract:
 
@@ -145,8 +208,9 @@ Official social discovery adapters use the same neutral candidate contract:
 
 For Tavily, use `url: "https://api.tavily.com/search"` and
 `metadata.provider: "tavily"`. SourceFoundry sends `topic: "news"`,
-`search_depth: "advanced"`, and requests raw content so downstream consumers
-receive fuller story context.
+`search_depth: "advanced"`, and keeps raw page content off by default so a
+discovery pass stays small and fast. A source can opt into raw content when its
+quality and budget policy explicitly require it.
 
 ## Environment
 
@@ -155,8 +219,11 @@ SOURCEFOUNDRY_DATABASE_URL=postgresql://...
 SOURCEFOUNDRY_API_TOKEN=...
 SOURCEFOUNDRY_PORT=8080
 SOURCEFOUNDRY_WORKER_ENABLED=1
+SOURCEFOUNDRY_RELEASE_SHA=<full git SHA injected by the image build>
 FIRECRAWL_API_KEY=... # optional, only for Firecrawl-backed discovery sources
 TAVILY_API_KEY=... # optional, only for Tavily-backed discovery sources
+EXA_API_KEY=... # optional, only for Exa-backed discovery sources
+SERPER_API_KEY=... # optional, only for Serper-backed discovery sources
 X_API_BEARER_TOKEN=... # optional, official X recent-search discovery
 YOUTUBE_API_KEY=... # optional, official YouTube video discovery
 APIFY_API_TOKEN=... # optional, capped public-data enrichment only

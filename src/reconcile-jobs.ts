@@ -50,6 +50,18 @@ async function activeSummary(db: Queryable): Promise<{
   };
 }
 
+async function uniqueGuardInstalled(db: Queryable): Promise<boolean> {
+  const result = await db.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'sourcefoundry_jobs_one_active_entity_idx'
+    ) AS installed
+  `);
+  return result.rows[0]?.installed === true;
+}
+
 export async function reconcileActiveJobs(
   pool: pg.Pool,
   options: ReconcileOptions,
@@ -82,7 +94,7 @@ export async function reconcileActiveJobs(
       duplicateGroups: before.duplicateGroups,
       cancelledJobs: 0,
       activeJobsAfter: before.activeJobs,
-      uniqueGuardInstalled: false,
+      uniqueGuardInstalled: await uniqueGuardInstalled(pool),
     };
   }
 
@@ -145,20 +157,14 @@ export async function reconcileActiveJobs(
         `remaining_groups=${after.duplicateGroups}`,
       );
     }
-    await client.query(`
-      CREATE UNIQUE INDEX sourcefoundry_jobs_one_active_entity_idx
-      ON sourcefoundry_jobs (tenant_id, job_type, entity_type, entity_id)
-      WHERE status IN ('queued', 'running') AND entity_id IS NOT NULL
-    `);
-    const guard = await client.query(`
-      SELECT EXISTS (
-        SELECT 1
-        FROM pg_indexes
-        WHERE schemaname = 'public'
-          AND indexname = 'sourcefoundry_jobs_one_active_entity_idx'
-      ) AS installed
-    `);
-    if (guard.rows[0]?.installed !== true) {
+    if (!await uniqueGuardInstalled(client)) {
+      await client.query(`
+        CREATE UNIQUE INDEX sourcefoundry_jobs_one_active_entity_idx
+        ON sourcefoundry_jobs (tenant_id, job_type, entity_type, entity_id)
+        WHERE status IN ('queued', 'running') AND entity_id IS NOT NULL
+      `);
+    }
+    if (!await uniqueGuardInstalled(client)) {
       throw new Error('Reconciliation unique guard could not be verified before commit');
     }
     await client.query('COMMIT');

@@ -29,6 +29,13 @@ primary_region = "sin"
     soft_limit = 40
     hard_limit = 60
 
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/ready"
+    timeout = "3s"
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = "512mb"

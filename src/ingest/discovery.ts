@@ -2,7 +2,7 @@ import { sha256 } from '../hash.js';
 import type { JsonRecord, SignalConversation, SignalConversationParticipant, SignalSource, SourceEntry } from '../types.js';
 import { canonicalizeUrl } from '../url.js';
 
-type DiscoveryProvider = 'firecrawl' | 'tavily' | 'x' | 'youtube' | 'youtube-comments' | 'apify' | 'generic';
+export type DiscoveryProvider = 'firecrawl' | 'tavily' | 'exa' | 'serper' | 'x' | 'youtube' | 'youtube-comments' | 'apify' | 'generic';
 
 type DiscoveryItem = {
   title: string;
@@ -26,13 +26,14 @@ export async function fetchDiscoveryEntries(
   queryOverride?: string[],
 ): Promise<DiscoveryFetchResult> {
   const provider = discoveryProvider(source.metadata.provider);
+  validateDiscoverySourceConfiguration(source);
   const queries = queryOverride ?? discoveryQueries(source);
   if (queries.length === 0) {
     if (queryOverride !== undefined) return { entries: [], httpStatus: null };
     throw new Error(`Discovery source ${source.id} has no metadata.queries`);
   }
   if (provider === 'apify') validateApifyRun(source, queries);
-  const limit = positiveInt(source.metadata.max_results_per_query, 5);
+  const limit = providerResultLimit(provider, positiveInt(source.metadata.max_results_per_query, 5));
   const entries: SourceEntry[] = [];
   let httpStatus: number | null = null;
 
@@ -128,6 +129,8 @@ function discoveryQueries(source: SignalSource): string[] {
 function discoveryProvider(value: unknown): DiscoveryProvider {
   if (value === 'firecrawl') return 'firecrawl';
   if (value === 'tavily') return 'tavily';
+  if (value === 'exa') return 'exa';
+  if (value === 'serper') return 'serper';
   if (value === 'x') return 'x';
   if (value === 'youtube') return 'youtube';
   if (value === 'youtube-comments') return 'youtube-comments';
@@ -147,7 +150,13 @@ function requestHeaders(source: SignalSource): Record<string, string> {
   };
   if (source.metadata.provider === 'tavily') return headers;
   const token = discoveryToken(source);
-  if (source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments') {
+  if (source.metadata.provider === 'exa') {
+    if (!token) throw new Error('Exa discovery source is missing EXA_API_KEY');
+    headers['x-api-key'] = token;
+  } else if (source.metadata.provider === 'serper') {
+    if (!token) throw new Error('Serper discovery source is missing SERPER_API_KEY');
+    headers['x-api-key'] = token;
+  } else if (source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments') {
     if (!token) throw new Error('YouTube discovery source is missing YOUTUBE_API_KEY');
     headers['x-goog-api-key'] = token;
   } else if (token) {
@@ -161,6 +170,10 @@ function discoveryToken(source: SignalSource): string {
     ? source.metadata.api_token_env
     : source.metadata.provider === 'tavily'
       ? 'TAVILY_API_KEY'
+      : source.metadata.provider === 'exa'
+        ? 'EXA_API_KEY'
+        : source.metadata.provider === 'serper'
+          ? 'SERPER_API_KEY'
       : source.metadata.provider === 'x'
         ? 'X_API_BEARER_TOKEN'
         : source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments'
@@ -212,6 +225,39 @@ function requestBody(
     return JSON.stringify(body);
   }
 
+  if (provider === 'exa') {
+    if (!discoveryToken(source)) throw new Error('Exa discovery source is missing EXA_API_KEY');
+    const body: JsonRecord = {
+      query,
+      type: firstString(source.metadata.search_type) || 'fast',
+      category: firstString(source.metadata.category) || 'news',
+      numResults: limit,
+      contents: {
+        text: { maxCharacters: boundedPositiveInt(source.metadata.max_content_characters, 2_000, 5_000) },
+      },
+    };
+    const includeDomains = stringArray(source.metadata.include_domains);
+    const excludeDomains = stringArray(source.metadata.exclude_domains);
+    const startPublishedDate = firstString(source.metadata.start_published_date);
+    if (includeDomains.length > 0) body.includeDomains = includeDomains;
+    if (excludeDomains.length > 0) body.excludeDomains = excludeDomains;
+    if (startPublishedDate) body.startPublishedDate = startPublishedDate;
+    return JSON.stringify(body);
+  }
+
+  if (provider === 'serper') {
+    if (!discoveryToken(source)) throw new Error('Serper discovery source is missing SERPER_API_KEY');
+    const body: JsonRecord = {
+      q: query,
+      num: limit,
+      gl: firstString(source.metadata.country) || 'us',
+      hl: firstString(source.metadata.language) || 'en',
+    };
+    const timeRange = firstString(source.metadata.time_range);
+    if (timeRange) body.tbs = timeRange;
+    return JSON.stringify(body);
+  }
+
   if (provider === 'apify') {
     if (!discoveryToken(source)) throw new Error('Apify discovery source is missing APIFY_API_TOKEN');
     const template = objectValue(source.metadata.request_template);
@@ -238,6 +284,8 @@ function normalizeDiscoveryItems(body: unknown, provider: DiscoveryProvider): Di
   if (provider === 'youtube') return normalizeYouTubeItems(body);
   if (provider === 'youtube-comments') return normalizeYouTubeCommentItems(body);
   if (provider === 'apify') return normalizeApifyItems(body);
+  if (provider === 'exa') return normalizeExaItems(body);
+  if (provider === 'serper') return normalizeSerperItems(body);
   const records = candidateArrays(body)
     .find((items) => items.length > 0) ?? [];
 
@@ -267,6 +315,47 @@ function normalizeDiscoveryItems(body: unknown, provider: DiscoveryProvider): Di
       raw: item,
     }))
     .filter((item) => item.title && item.url);
+}
+
+function normalizeExaItems(body: unknown): DiscoveryItem[] {
+  const record = objectValue(body);
+  const results = Array.isArray(record.results) ? record.results : [];
+  return results.flatMap((value) => {
+    const item = objectValue(value);
+    const title = cleanText(firstString(item.title));
+    const url = firstString(item.url);
+    if (!title || !url) return [];
+    return [{
+      title,
+      url,
+      summary: cleanText(firstString(item.summary, item.text, firstArray(item.highlights)[0])),
+      author: cleanText(firstString(item.author)),
+      publishedAt: parseDate(firstString(item.publishedDate)),
+      raw: item,
+    }];
+  });
+}
+
+function normalizeSerperItems(body: unknown): DiscoveryItem[] {
+  const record = objectValue(body);
+  const results = Array.isArray(record.news) ? record.news : Array.isArray(record.organic) ? record.organic : [];
+  return results.flatMap((value) => {
+    const item = objectValue(value);
+    const title = cleanText(firstString(item.title));
+    const url = firstString(item.link, item.url);
+    if (!title || !url) return [];
+    return [{
+      title,
+      url,
+      summary: cleanText(firstString(item.snippet, item.description)),
+      author: cleanText(firstString(item.source)),
+      // Serper commonly returns relative labels such as "2 hours ago". Those
+      // are useful display text but not exact provenance, so only parse dates
+      // that can be represented honestly as an ISO timestamp.
+      publishedAt: parseDate(firstString(item.date)),
+      raw: item,
+    }];
+  });
 }
 
 function normalizeXItems(body: unknown): DiscoveryItem[] {
@@ -649,7 +738,20 @@ function validateApifyRun(source: SignalSource, queries: string[]): void {
 }
 
 export function validateDiscoverySourceConfiguration(source: SignalSource): void {
-  if (source.metadata.provider !== 'apify') return;
+  const provider = discoveryProvider(source.metadata.provider);
+  if (provider === 'exa') {
+    validateOfficialSearchEndpoint(source.url, 'Exa', 'api.exa.ai', ['/search']);
+    return;
+  }
+  if (provider === 'serper') {
+    validateOfficialSearchEndpoint(source.url, 'Serper', 'google.serper.dev', ['/news', '/search']);
+    return;
+  }
+  if (provider === 'tavily') {
+    validateOfficialSearchEndpoint(source.url, 'Tavily', 'api.tavily.com', ['/search']);
+    return;
+  }
+  if (provider !== 'apify') return;
   let endpoint: URL;
   try {
     endpoint = new URL(source.url);
@@ -680,6 +782,26 @@ export function validateDiscoverySourceConfiguration(source: SignalSource): void
   }
 }
 
+function validateOfficialSearchEndpoint(url: string, provider: string, hostname: string, paths: string[]): void {
+  let endpoint: URL;
+  try {
+    endpoint = new URL(url);
+  } catch {
+    throw new Error(`${provider} discovery source URL is invalid`);
+  }
+  const pathname = endpoint.pathname.replace(/\/$/, '') || '/';
+  if (
+    endpoint.protocol !== 'https:'
+    || endpoint.hostname !== hostname
+    || endpoint.username
+    || endpoint.password
+    || endpoint.search
+    || !paths.includes(pathname)
+  ) {
+    throw new Error(`${provider} key may be sent only to an approved HTTPS ${hostname} search endpoint without URL credentials`);
+  }
+}
+
 function parseDate(input: string): string | null {
   if (!input) return null;
   const timestamp = Date.parse(input);
@@ -705,4 +827,14 @@ function positiveInt(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
     ? Math.floor(value)
     : fallback;
+}
+
+function boundedPositiveInt(value: unknown, fallback: number, maximum: number): number {
+  return Math.min(maximum, positiveInt(value, fallback));
+}
+
+function providerResultLimit(provider: DiscoveryProvider, requested: number): number {
+  return provider === 'tavily' || provider === 'exa' || provider === 'serper'
+    ? Math.min(10, requested)
+    : requested;
 }

@@ -13,6 +13,7 @@ import type {
 } from './types.js';
 
 export interface SignalRepository {
+  checkReadiness(): Promise<void>;
   upsertTenant(input: { slug: string; name: string; config?: JsonRecord }): Promise<SignalTenant>;
   createSource(input: {
     tenantId: string;

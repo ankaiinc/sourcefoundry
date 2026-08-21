@@ -26,6 +26,21 @@ describe('active job reconciliation guard', () => {
     })).rejects.toThrow('--expect-duplicate-jobs=<dry-run count>');
   });
 
+  it('reports an already-installed guard without mutating the database', async () => {
+    const pool = {
+      query: async (sql: string) => sql.includes('FROM pg_indexes')
+        ? { rows: [{ installed: true }] }
+        : { rows: [{ active_jobs: 2, duplicate_jobs: 0, duplicate_groups: 0 }] },
+      connect: () => { throw new Error('dry run must not open a transaction'); },
+    } as unknown as pg.Pool;
+
+    await expect(reconcileActiveJobs(pool, { apply: false })).resolves.toMatchObject({
+      mode: 'dry-run',
+      duplicateJobs: 0,
+      uniqueGuardInstalled: true,
+    });
+  });
+
   it('rolls back before cancellation when locked counts differ from the approval', async () => {
     const statements: string[] = [];
     const summary = { rows: [{ active_jobs: 10, duplicate_jobs: 8, duplicate_groups: 2 }] };
@@ -58,12 +73,13 @@ describe('active job reconciliation guard', () => {
     const before = { rows: [{ active_jobs: 10, duplicate_jobs: 8, duplicate_groups: 2 }] };
     const after = { rows: [{ active_jobs: 2, duplicate_jobs: 0, duplicate_groups: 0 }] };
     let summaryReads = 0;
+    let guardReads = 0;
     const client = {
       query: async (sql: string) => {
         statements.push(sql.trim());
         if (sql.includes('WITH grouped AS')) return summaryReads++ === 0 ? before : after;
         if (sql.includes('UPDATE sourcefoundry_jobs AS jobs')) return { rows: [], rowCount: 8 };
-        if (sql.includes('FROM pg_indexes')) return { rows: [{ installed: true }], rowCount: 1 };
+        if (sql.includes('FROM pg_indexes')) return { rows: [{ installed: guardReads++ > 0 }], rowCount: 1 };
         return { rows: [], rowCount: 0 };
       },
       release: () => undefined,
@@ -92,6 +108,7 @@ describe('active job reconciliation guard', () => {
     expect(statements.at(-1)).toBe('COMMIT');
     expect(statements).toContain("SET LOCAL lock_timeout = '5s'");
     expect(statements).toContain("SET LOCAL statement_timeout = '15min'");
+    expect(statements.some((sql) => sql.includes('CREATE UNIQUE INDEX sourcefoundry_jobs_one_active_entity_idx'))).toBe(true);
     expect(statements.find((sql) => sql.includes('UPDATE sourcefoundry_jobs AS jobs'))).not.toContain('RETURNING');
   });
 });
