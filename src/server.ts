@@ -10,6 +10,7 @@ import {
   openApiDocument,
   SOURCEFOUNDRY_AGENT_GUIDE_PATH,
   SOURCEFOUNDRY_DISCOVERY_PATH,
+  SOURCEFOUNDRY_LLMS_PATH,
   SOURCEFOUNDRY_OPENAPI_PATH,
 } from './agent-discovery.js';
 import { createAgentToken, startOfUtcDay, tokenHash, tokenPrefix, validateAgentSourcePolicy } from './agent-access.js';
@@ -43,7 +44,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, openApiDocument(config));
     }
 
-    if (req.method === 'GET' && url.pathname === SOURCEFOUNDRY_AGENT_GUIDE_PATH) {
+    if (req.method === 'GET' && (url.pathname === SOURCEFOUNDRY_AGENT_GUIDE_PATH || url.pathname === SOURCEFOUNDRY_LLMS_PATH)) {
       return sendText(res, 200, agentGuide(config));
     }
 
@@ -91,6 +92,7 @@ const server = http.createServer(async (req, res) => {
         documentation: {
           openapi: `${config.publicBaseUrl}${SOURCEFOUNDRY_OPENAPI_PATH}`,
           agentGuide: `${config.publicBaseUrl}${SOURCEFOUNDRY_AGENT_GUIDE_PATH}`,
+          llms: `${config.publicBaseUrl}${SOURCEFOUNDRY_LLMS_PATH}`,
         },
       });
     }

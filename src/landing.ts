@@ -8,6 +8,8 @@ export function landingPage(baseUrl: string): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Your source policy. One dependable evidence API for agents." />
+  <link rel="alternate" type="text/markdown" href="${origin}/agent.md" title="SourceFoundry agent guide" />
+  <link rel="alternate" type="text/plain" href="${origin}/llms.txt" title="SourceFoundry LLM instructions" />
   <title>SourceFoundry — your sources, one API</title>
   <style>
     :root { --ink:#131512; --paper:#f1eee6; --field:#fbfaf5; --acid:#d8ff43; --sky:#c9dbff; --rust:#ca4b20; --quiet:#696a62; --hair:#bbb9af; }

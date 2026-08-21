@@ -5,6 +5,7 @@ describe('SourceFoundry landing page', () => {
   it('offers a direct autonomous enrollment path on the canonical domain', () => {
     const page = landingPage('https://sources.4agents.fyi');
     expect(page).toContain('/v1/agent-enrollments');
+    expect(page).toContain('https://sources.4agents.fyi/llms.txt');
     expect(page).toContain('SOURCEFOUNDRY_API_TOKEN');
     expect(page).toContain('Your sources.<br>One evidence API.');
     expect(page).toContain('Evidence capacity');

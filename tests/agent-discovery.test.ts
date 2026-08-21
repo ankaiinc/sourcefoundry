@@ -25,6 +25,7 @@ describe('SourceFoundry agent discovery', () => {
       discovery: {
         openapi: 'https://sources.4agents.fyi/openapi.json',
         agentGuide: 'https://sources.4agents.fyi/agent.md',
+        llms: 'https://sources.4agents.fyi/llms.txt',
       },
     });
   });
@@ -35,6 +36,7 @@ describe('SourceFoundry agent discovery', () => {
     expect(document.servers[0]?.url).toBe('https://sources.4agents.fyi');
     expect(document.paths).toHaveProperty('/v1/tenants');
     expect(document.paths).toHaveProperty('/v1/agent-enrollments');
+    expect(document.paths).toHaveProperty('/llms.txt');
     expect(document.paths).toHaveProperty('/v1/sources');
     expect(document.paths).toHaveProperty('/v1/ingest/source');
     expect(document.paths).toHaveProperty('/v1/signals');

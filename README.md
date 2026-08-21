@@ -77,6 +77,7 @@ discover its tool contract without a token:
   security boundary.
 - `GET /openapi.json` — OpenAPI 3.1 definition for a tool connector.
 - `GET /agent.md` — the concise operating guide for an autonomous agent.
+- `GET /llms.txt` — machine-discoverable alias for the same operating guide.
 - `GET /v1/meta` — public capability discovery.
 
 An agent can start without a pre-provisioned account: `POST

@@ -2,6 +2,7 @@ import { SOURCEFOUNDRY_SCHEMA_VERSION } from './public-contract.js';
 import type { SourceFoundryConfig } from './config.js';
 
 export const SOURCEFOUNDRY_AGENT_GUIDE_PATH = '/agent.md';
+export const SOURCEFOUNDRY_LLMS_PATH = '/llms.txt';
 export const SOURCEFOUNDRY_OPENAPI_PATH = '/openapi.json';
 export const SOURCEFOUNDRY_DISCOVERY_PATH = '/.well-known/sourcefoundry.json';
 
@@ -15,6 +16,7 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     discovery: {
       openapi: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_OPENAPI_PATH),
       agentGuide: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_AGENT_GUIDE_PATH),
+      llms: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_LLMS_PATH),
       capabilities: `${config.publicBaseUrl}/v1/meta`,
     },
     authentication: {
@@ -54,6 +56,7 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
       '/health': { get: operation('Process liveness', 'Returns public service identity and release.', { security: [] }) },
       '/ready': { get: operation('Service readiness', 'Returns readiness after a database connectivity check.', { security: [] }) },
       '/v1/meta': { get: operation('Discover agent capabilities', 'Returns the supported agent workflow and authentication boundary.', { security: [] }) },
+      '/llms.txt': { get: operation('Read the agent guide', 'A machine-discoverable alias for the SourceFoundry agent guide.', { security: [] }) },
       '/v1/agent-enrollments': {
         post: operation('Create an autonomous workspace', 'Creates a tenant-scoped credential and returns its secret exactly once. No authentication is required.', {
           security: [],
