@@ -1,4 +1,4 @@
-import { fetchDiscoveryEntries } from './ingest/discovery.js';
+import { fetchDiscoveryEntries, isActionableLinkedInUrl } from './ingest/discovery.js';
 import { entryPayload, parseFeed, sourceItemHash } from './ingest/rss.js';
 import type { SignalRepository } from './repository.js';
 import { scoreEntry } from './scoring.js';
@@ -26,20 +26,22 @@ export async function scheduleDueSources(
   const now = options.now ?? new Date();
   const sources = await repo.listDueSources(options.maxDueSources, now);
   let enqueued = 0;
+  let alreadyActive = 0;
 
   for (const source of sources) {
-    await repo.enqueueSourceFetch({
+    const result = await repo.enqueueSourceFetch({
       tenantId: source.tenantId,
       sourceId: source.id,
       priority: sourcePriority(source),
       runAfter: now.toISOString(),
     });
-    enqueued++;
+    if (result.created) enqueued++;
+    else alreadyActive++;
   }
 
   return {
     itemsProcessed: enqueued,
-    detail: { dueSources: sources.length, enqueued },
+    detail: { dueSources: sources.length, enqueued, alreadyActive },
   };
 }
 
@@ -55,14 +57,36 @@ export async function drainOnce(
     return { itemsProcessed: 0, detail: { claimed: 0 } };
   }
 
+  return executeClaimedJob(repo, job, options.fetchFn ?? fetch, options.maxAttempts);
+}
+
+export async function drainJobOnce(
+  repo: SignalRepository,
+  jobId: string,
+  options: Pick<PipelineOptions, 'maxAttempts'> & { fetchFn?: typeof fetch },
+): Promise<TickResult> {
+  const job = await repo.claimJobById({ jobId, maxAttempts: options.maxAttempts });
+  if (!job) {
+    return { itemsProcessed: 0, detail: { claimed: 0, jobId } };
+  }
+
+  return executeClaimedJob(repo, job, options.fetchFn ?? fetch, options.maxAttempts);
+}
+
+async function executeClaimedJob(
+  repo: SignalRepository,
+  job: SignalJob,
+  fetchFn: typeof fetch,
+  maxAttempts: number,
+): Promise<TickResult> {
   try {
-    const result = await processJob(repo, job, options.fetchFn ?? fetch);
+    const result = await processJob(repo, job, fetchFn);
     await repo.markJobCompleted(job.id, result.detail);
     return result;
   } catch (error) {
     const message = serializeError(error);
     const retryAt = new Date(Date.now() + backoffMs(job.attemptCount));
-    if (job.attemptCount < options.maxAttempts) {
+    if (job.attemptCount < maxAttempts) {
       await repo.deferJob(job.id, message, retryAt);
     } else {
       await repo.markJobFailed(job.id, message);
@@ -150,14 +174,29 @@ async function fetchSource(
   let itemsInserted = 0;
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), source.timeoutSeconds * 1000);
     const headers: Record<string, string> = {};
     if (source.etag) headers['If-None-Match'] = source.etag;
     if (source.lastModified) headers['If-Modified-Since'] = source.lastModified;
 
-    const fetched = await fetchSourceEntries(source, fetchFn, headers, controller.signal);
-    clearTimeout(timeout);
+    const queryOverride = await enrichmentQueries(repo, source);
+    // Umbrella deadline for the whole source. Discovery runs its queries
+    // sequentially, each with its own timeoutSeconds budget, so this ceiling
+    // must leave room for every query plus a small buffer — otherwise it would
+    // re-impose one shared budget across all queries and abort them mid-flight.
+    const queryCount = Math.max(1, queryOverride?.length
+      ?? (Array.isArray(source.metadata.queries) ? source.metadata.queries.length : 1));
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      source.timeoutSeconds * 1000 * queryCount + 5000,
+    );
+
+    let fetched: Awaited<ReturnType<typeof fetchSourceEntries>>;
+    try {
+      fetched = await fetchSourceEntries(source, fetchFn, headers, controller.signal, queryOverride);
+    } finally {
+      clearTimeout(timeout);
+    }
     httpStatus = fetched.httpStatus;
 
     if (fetched.notModified) {
@@ -207,6 +246,7 @@ async function fetchSource(
             sourceId: source.id,
             sourceName: source.name,
             model: 'heuristic-v1',
+            ...(source.metadata.mode === 'enrichment' ? { observationMode: 'enrichment' } : {}),
           },
         });
       }
@@ -253,6 +293,7 @@ async function fetchSourceEntries(
   fetchFn: typeof fetch,
   headers: Record<string, string>,
   signal: AbortSignal,
+  queryOverride?: string[],
 ): Promise<{
   entries: ReturnType<typeof parseFeed>;
   httpStatus: number | null;
@@ -260,8 +301,11 @@ async function fetchSourceEntries(
   etag: string | null;
   lastModified: string | null;
 }> {
-  if (source.sourceType === 'web' && source.metadata.mode === 'discovery') {
-    const discovered = await fetchDiscoveryEntries(source, fetchFn, signal);
+  if (
+    source.sourceType === 'web'
+    && (source.metadata.mode === 'discovery' || source.metadata.mode === 'enrichment')
+  ) {
+    const discovered = await fetchDiscoveryEntries(source, fetchFn, signal, queryOverride);
     return {
       entries: discovered.entries,
       httpStatus: discovered.httpStatus,
@@ -292,6 +336,32 @@ async function fetchSourceEntries(
     etag,
     lastModified,
   };
+}
+
+async function enrichmentQueries(repo: SignalRepository, source: SignalSource): Promise<string[] | undefined> {
+  if (source.metadata.mode !== 'enrichment' || source.metadata.provider !== 'apify') return undefined;
+  const statuses = Array.isArray(source.metadata.upstream_statuses)
+    ? source.metadata.upstream_statuses.filter((status): status is string => typeof status === 'string' && status.trim().length > 0)
+    : ['published', 'approved', 'ready_for_review'];
+  const minimumScore = typeof source.metadata.upstream_min_score === 'number'
+    ? Math.max(0, Math.min(1, source.metadata.upstream_min_score))
+    : 0.65;
+  const refreshHours = typeof source.metadata.reenrich_after_hours === 'number'
+    ? Math.max(1, source.metadata.reenrich_after_hours)
+    : 24;
+  const cutoff = Date.now() - refreshHours * 3_600_000;
+  const signals = await repo.listSignals({
+    tenantId: source.tenantId,
+    statuses,
+    limit: Math.min(100, Math.max(source.maxItemsPerFetch * 5, source.maxItemsPerFetch)),
+  });
+  return signals
+    .filter((signal) => signal.source.provider !== 'apify')
+    .filter((signal) => signal.score >= minimumScore && isActionableLinkedInUrl(signal.url))
+    .filter((signal) => !signal.conversation || Date.parse(signal.conversation.observedAt) <= cutoff)
+    .map((signal) => signal.url)
+    .filter((url, index, urls) => urls.indexOf(url) === index)
+    .slice(0, source.maxItemsPerFetch);
 }
 
 async function recordSuccess(

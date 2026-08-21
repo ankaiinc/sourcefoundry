@@ -13,6 +13,7 @@ import type {
 } from './types.js';
 
 export interface SignalRepository {
+  checkReadiness(): Promise<void>;
   upsertTenant(input: { slug: string; name: string; config?: JsonRecord }): Promise<SignalTenant>;
   createSource(input: {
     tenantId: string;
@@ -22,12 +23,15 @@ export interface SignalRepository {
     reliability?: number;
     intervalMinutes?: number;
     maxItemsPerFetch?: number;
+    timeoutSeconds?: number;
     metadata?: JsonRecord;
   }): Promise<SignalSource>;
+  listSources(input: { tenantSlug?: string; tenantId?: string }): Promise<SignalSource[]>;
   listDueSources(limit: number, now: Date): Promise<SignalSource[]>;
   getSource(sourceId: string): Promise<SignalSource | null>;
-  enqueueSourceFetch(input: EnqueueSourceJobInput): Promise<string>;
+  enqueueSourceFetch(input: EnqueueSourceJobInput): Promise<{ jobId: string; created: boolean }>;
   claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null>;
+  claimJobById(input: { jobId: string; maxAttempts: number }): Promise<SignalJob | null>;
   markJobCompleted(jobId: string, result: JsonRecord): Promise<void>;
   markJobFailed(jobId: string, error: string): Promise<void>;
   deferJob(jobId: string, error: string, runAfter: Date): Promise<void>;
