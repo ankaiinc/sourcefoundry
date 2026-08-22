@@ -102,7 +102,11 @@ async function collectResponse(response: import('node:http').IncomingMessage, st
     chunks.push(buffer);
   }
   const body = Buffer.concat(chunks);
-  return new Response(status === 204 || status === 205 ? null : body, { status, headers: responseHeaders(response.headers) });
+  return new Response(responseStatusAllowsBody(status) ? body : null, { status, headers: responseHeaders(response.headers) });
+}
+
+export function responseStatusAllowsBody(status: number): boolean {
+  return status !== 204 && status !== 205 && status !== 304;
 }
 
 function responseHeaders(headers: IncomingHttpHeaders): Headers {

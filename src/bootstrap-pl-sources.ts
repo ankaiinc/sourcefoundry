@@ -20,6 +20,31 @@ type SourceSpec = {
 
 export const pragmaticLeadersSourcePlan: SourceSpec[] = [
   {
+    name: 'OpenAI product news', sourceType: 'rss', url: 'https://openai.com/news/rss.xml',
+    reliability: 0.9, intervalMinutes: 120, maxItemsPerFetch: 25, timeoutSeconds: 25,
+    metadata: { relevance_terms: ['product', 'launch', 'agent', 'developer', 'enterprise', 'safety', 'policy', 'pricing'] },
+  },
+  {
+    name: 'GitHub Changelog', sourceType: 'rss', url: 'https://github.blog/changelog/feed/',
+    reliability: 0.88, intervalMinutes: 120, maxItemsPerFetch: 25, timeoutSeconds: 25,
+    metadata: { relevance_terms: ['developer', 'platform', 'copilot', 'agent', 'security', 'enterprise', 'workflow', 'api'] },
+  },
+  {
+    name: 'Cloudflare engineering and product', sourceType: 'rss', url: 'https://blog.cloudflare.com/rss/',
+    reliability: 0.84, intervalMinutes: 120, maxItemsPerFetch: 20, timeoutSeconds: 25,
+    metadata: { relevance_terms: ['product', 'platform', 'developer', 'ai', 'security', 'outage', 'pricing', 'infrastructure'] },
+  },
+  {
+    name: 'The Pragmatic Engineer', sourceType: 'rss', url: 'https://blog.pragmaticengineer.com/feed',
+    reliability: 0.86, intervalMinutes: 180, maxItemsPerFetch: 15, timeoutSeconds: 25,
+    metadata: { relevance_terms: ['engineering', 'leadership', 'product', 'organization', 'developer', 'ai', 'career'] },
+  },
+  {
+    name: 'Intercom product and AI', sourceType: 'rss', url: 'https://www.intercom.com/blog/feed/',
+    reliability: 0.82, intervalMinutes: 180, maxItemsPerFetch: 15, timeoutSeconds: 25,
+    metadata: { relevance_terms: ['product', 'customer', 'support', 'ai', 'agent', 'pricing', 'launch', 'operations'] },
+  },
+  {
     name: 'Hacker News Best', sourceType: 'rss', url: 'https://hnrss.org/best',
     reliability: 0.7, intervalMinutes: 60, maxItemsPerFetch: 30, timeoutSeconds: 20,
     metadata: { relevance_terms: ['product', 'leadership', 'engineering', 'startup', 'ai'] },
@@ -93,6 +118,7 @@ export const pragmaticLeadersMonthlyCostPlan = {
   exa: { monthlyCalls: 240, estimatedUsd: 2.88, note: '$0.007 search plus up to five $0.001 text results' },
   serper: { monthlyCalls: 120, estimatedUsd: 0.12, note: '$1 per 1,000-query starter rate' },
   github: { monthlyCalls: 240, estimatedUsd: 0, note: 'public repository search; no paid key required at this cadence' },
+  freeRss: { sourceCount: 8, estimatedUsd: 0, note: 'public publisher feeds; no search-provider calls' },
   estimatedMonthlyUsd: 3,
   maximumApprovedMonthlyUsd: 5,
 };
