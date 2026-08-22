@@ -3,6 +3,21 @@ import { pragmaticLeadersMonthlyCostPlan, pragmaticLeadersSourcePlan } from '../
 import { validateDiscoverySourceConfiguration } from '../src/ingest/discovery.js';
 
 describe('Pragmatic Leaders provider plan', () => {
+  it('includes reliable free publisher feeds for product decisions and measurable changes', () => {
+    const rssSources = pragmaticLeadersSourcePlan.filter((source) => source.sourceType === 'rss');
+
+    expect(rssSources.map((source) => source.name)).toEqual(expect.arrayContaining([
+      'OpenAI product news',
+      'GitHub Changelog',
+      'Cloudflare engineering and product',
+      'The Pragmatic Engineer',
+      'Intercom product and AI',
+    ]));
+    expect(new Set(rssSources.map((source) => source.url)).size).toBe(rssSources.length);
+    expect(rssSources.every((source) => source.intervalMinutes >= 60)).toBe(true);
+    expect(rssSources.every((source) => source.maxItemsPerFetch <= 40)).toBe(true);
+  });
+
   it('keeps every discovery provider behind a bounded, valid SourceFoundry source', () => {
     const webSources = pragmaticLeadersSourcePlan.filter((source) => source.sourceType === 'web');
     expect(webSources.map((source) => source.metadata.provider)).toEqual([
@@ -28,5 +43,6 @@ describe('Pragmatic Leaders provider plan', () => {
     expect(pragmaticLeadersMonthlyCostPlan.github.estimatedUsd).toBe(0);
     expect(pragmaticLeadersMonthlyCostPlan.serper.monthlyCalls).toBe(120);
     expect(pragmaticLeadersMonthlyCostPlan.tavily.monthlyCredits).toBeLessThanOrEqual(1_000);
+    expect(pragmaticLeadersMonthlyCostPlan.freeRss.estimatedUsd).toBe(0);
   });
 });
