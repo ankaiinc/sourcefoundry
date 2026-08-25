@@ -9,9 +9,12 @@ impression-aware serving.
 
 ## Product and open-source boundary
 
-SourceFoundry should remain a separate service. Its product promise is one
-provider-neutral evidence API for agents and applications; Attention OS is one
-consumer, not its organizing domain.
+SourceFoundry should remain a separate service. Its product promise is
+dependable, recurring source supply: a consumer describes the material it
+needs, SourceFoundry operates collection and source health, and the consumer
+retains ownership of meaning, judgment, ranking, writing, workflow, and
+publication. Attention OS and Pragmatic Leaders are consumers, not organizing
+domains.
 
 The recommended open-source boundary is the portable ingestion engine: the
 versioned signal contract, repository interfaces, source adapters, migrations,
@@ -26,7 +29,14 @@ model, and publish a tagged contract version. Repository visibility is a public
 release decision; the Attention OS activation does not depend on making it
 public.
 
-`GET /v1/signals` is the versioned consumer boundary. Each signal includes the
+The high-level consumer boundary is a durable source feed: build it with `POST
+/v1/source-feeds`, enqueue collection with `POST
+/v1/source-feeds/:sourceFeedId/runs`, incrementally sync candidates from `GET
+/v1/source-feeds/:sourceFeedId/candidates`, and inspect operational evidence at
+`GET /v1/source-feeds/:sourceFeedId/health`. These endpoints orchestrate the
+existing source, job, and candidate pipeline rather than replacing it.
+
+Each returned candidate uses the existing versioned `PublicSignal` contract and includes the
 canonical URL, source item identity, provider, query when available, content
 hash, fetched/published timestamps, age, field-completeness flags, source
 reliability, and consecutive-failure state. Consumers should lower confidence
@@ -83,16 +93,29 @@ discover its tool contract without a token:
 An agent can start without a pre-provisioned account: `POST
 /v1/agent-enrollments` with a unique workspace slug and name returns a
 tenant-scoped `SOURCEFOUNDRY_API_TOKEN` exactly once. Store it in the runtime
-secret store, then use it as a Bearer token to configure that workspace's
-sources, enqueue deduplicated fetches, and consume normalized signals. The
+secret store, then use it as a Bearer token to build a durable source feed,
+enqueue deduplicated collection, and consume normalized candidates. The
 agent cannot inspect another workspace or run provider work directly.
 
 Autonomous workspaces are intentionally bounded: at most three sources, a
 12-hour minimum fetch interval, ten results per fetch, and a shared daily job
 budget. They may use RSS/Atom feeds or the hosted Tavily, Exa, and Serper
-adapters; provider secrets remain internal. Source configuration is idempotent
-by tenant and URL, so a safe retry updates the intended source rather than
-creating another one.
+adapters; provider secrets remain internal. Source-feed creation requires an
+`Idempotency-Key`, so a safe retry updates the intended feed and reuses its
+existing sources. An active feed run and its low-level jobs are also reused on
+retry.
+
+## MCP
+
+The `mcp/` package exposes the same public capability without making agents
+operate low-level source and job endpoints:
+
+- `build_source_feed` creates or updates a durable feed and can enqueue its
+  first run.
+- `read_source_feed` returns neutral candidates and optional source health.
+
+Set `SOURCEFOUNDRY_API_TOKEN` in the MCP runtime secret store. See
+[`mcp/README.md`](mcp/README.md) for client configuration.
 
 SourceFoundry owns provider keys and spend policy. Agents must never put a
 Tavily, Serper, Exa, Firecrawl, or other provider credential into a request,
@@ -145,7 +168,8 @@ and [Serper pricing](https://serper.dev/).
 
 - API process: `src/server.ts`
 - Worker process: `src/worker.ts`
-- Durable state: dedicated Supabase Postgres
+- Durable state: dedicated Supabase Postgres; `migrations/003_source_feeds.sql`
+  adds only feed definitions, source membership, runs, and run-job membership.
 - Queue claim: `claim_next_sourcefoundry_job()` with `FOR UPDATE SKIP LOCKED`
 - Zombie reaping: `reap_zombie_sourcefoundry_jobs()`
 - Active fetch idempotency: one queued/running job per tenant and source. The

@@ -37,6 +37,10 @@ describe('SourceFoundry agent discovery', () => {
     expect(document.servers[0]?.url).toBe('https://sources.4agents.fyi');
     expect(document.paths).toHaveProperty('/v1/tenants');
     expect(document.paths).toHaveProperty('/v1/agent-enrollments');
+    expect(document.paths).toHaveProperty('/v1/source-feeds');
+    expect(document.paths).toHaveProperty('/v1/source-feeds/{sourceFeedId}/runs');
+    expect(document.paths).toHaveProperty('/v1/source-feeds/{sourceFeedId}/candidates');
+    expect(document.paths).toHaveProperty('/v1/source-feeds/{sourceFeedId}/health');
     expect(document.paths).toHaveProperty('/llms.txt');
     expect(document.paths).toHaveProperty('/v1/sources');
     expect(document.paths).toHaveProperty('/v1/ingest/source');

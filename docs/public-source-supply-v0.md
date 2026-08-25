@@ -171,11 +171,17 @@ Content-Type: application/json
 Request rules:
 
 - `name` identifies the durable feed for operators and consumers.
-- `purpose` guides neutral relevance filtering. It is not an instruction to
-  write product-specific analysis.
-- `feed` and `page` sources identify exact public HTTP(S) material.
+- `purpose` records why the supply exists and helps operators inspect the plan.
+  Discovery relevance comes from the caller's explicit bounded queries; the
+  first implementation does not secretly turn purpose prose into a new rubric.
+- `feed` sources identify exact public RSS or Atom material. The first
+  implementation rejects `page` rather than pretending arbitrary HTML has
+  reliable extraction; `page` enters the contract only with a bounded HTML
+  extractor and fixtures.
 - `discovery` sources declare bounded queries and domain policy. SourceFoundry
   chooses only from registered, approved adapters.
+- v0 accepts one discovery entry per feed; callers combine its queries and
+  domain policy so the hosted provider lane cannot be duplicated accidentally.
 - A required source that fails stays visibly degraded. A fallback may add
   supply but cannot erase the failure.
 - Credentials, cookies, arbitrary headers, private-network addresses, and
@@ -248,7 +254,8 @@ run. It is never silently presented as a clean success.
 Supported filters:
 
 - `since`: ISO timestamp for incremental consumer sync;
-- `cursor`: stable pagination cursor;
+- `cursor`: reserved for stable pagination after cursor membership is persisted;
+  the first implementation rejects it and supports `since` for incremental sync;
 - `limit`: bounded result count;
 - `statuses`: candidate lifecycle filters supported by the current contract.
 
@@ -321,7 +328,6 @@ Companion tool:
 read_source_feed({
   source_feed_id,
   since?,
-  cursor?,
   limit?,
   include_health?
 })
@@ -340,7 +346,7 @@ The intended production flow is:
 
 ```text
 SourceFoundry operates external source supply continuously
-  -> consumer syncs new neutral candidates by cursor
+  -> consumer syncs new neutral candidates with since
   -> consumer stores them in its own database
   -> consumer applies its taxonomy, prompts, judgment, and review rules
   -> consumer serves its own customer experience locally
@@ -378,9 +384,13 @@ The additional durable concepts are deliberately small:
 - `source_feeds`: tenant ownership, purpose, cadence, limits, lifecycle, and
   idempotency.
 - `source_feed_sources`: membership and the effective per-source policy.
-- `source_feed_runs`: request-scoped execution summary across underlying jobs.
-- `source_feed_candidates`: stable feed membership/cursor when one canonical
-  candidate may be relevant to more than one feed.
+- `source_feed_runs`: a durable record for each bounded fan-out.
+- `source_feed_run_jobs`: membership connecting a high-level run to the existing
+  durable source jobs.
+
+Candidate membership is derived through `source_feed_sources` and the canonical
+source item. A separate cursor table is deferred until true cursor pagination is
+added; the first release uses timestamp-based incremental sync.
 
 Existing source items, fetch attempts, candidates, jobs, and heartbeats remain
 canonical.
@@ -434,14 +444,14 @@ feeds and bounded collection capacity, not raw provider calls.
 - Arbitrary provider endpoints or caller-supplied provider keys.
 - Public-by-default candidate pages or generated share reports.
 - Alerts, downstream webhooks, or consumer UI workflows. Consumers can poll or
-  sync by cursor in v0.
+  sync incrementally with `since` in v0.
 
 ## Release slices
 
 ### Slice 1: durable source feed
 
 Add the `source-feeds` create/read contract, idempotent mapping to existing
-sources, feed runs, candidate cursor, and real feed-health response. Prove it
+sources, feed runs, timestamp-based incremental sync, and real feed-health response. Prove it
 with Pragmatic Leaders as the first consumer.
 
 ### Slice 2: agent distribution

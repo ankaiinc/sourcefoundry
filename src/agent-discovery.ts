@@ -11,7 +11,7 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     schemaVersion: SOURCEFOUNDRY_SCHEMA_VERSION,
     release: config.releaseSha,
     service: 'sourcefoundry',
-    purpose: 'Configure provider-neutral sources and retrieve normalized evidence for agents and applications.',
+    purpose: 'Build durable source feeds and retrieve fresh, normalized candidate supply for agents and applications.',
     baseUrl: config.publicBaseUrl,
     discovery: {
       openapi: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_OPENAPI_PATH),
@@ -28,9 +28,9 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     workflow: [
       'Read /v1/meta or the OpenAPI document.',
       'Create an autonomous workspace and one-time tenant-scoped credential with POST /v1/agent-enrollments.',
-      'Upsert each source with POST /v1/sources.',
-      'Enqueue a fetch with POST /v1/ingest/source and let the worker process it.',
-      'Read normalized evidence with GET /v1/signals.',
+      'Describe the required source supply with POST /v1/source-feeds and a stable Idempotency-Key.',
+      'Enqueue a bounded collection run with POST /v1/source-feeds/{sourceFeedId}/runs.',
+      'Read neutral candidates with GET /v1/source-feeds/{sourceFeedId}/candidates and inspect operational evidence at /health.',
     ],
     guardrails: [
       'Source upserts are idempotent by tenant and source URL.',
@@ -86,6 +86,57 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
               config: { type: 'object', additionalProperties: true },
             },
           }),
+        }),
+      },
+      '/v1/source-feeds': {
+        post: operation('Build a durable source feed', 'Creates or updates a recurring source-supply contract. Requires an Idempotency-Key header. Autonomous credentials infer their tenant; operator credentials provide tenantId.', {
+          parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', maxLength: 200 } }],
+          requestBody: jsonBody({
+            type: 'object', required: ['name', 'purpose', 'sources', 'cadence'], properties: {
+              tenantId: { type: 'string', format: 'uuid', description: 'Required only for operator credentials.' },
+              name: { type: 'string', maxLength: 160 },
+              purpose: { type: 'string', maxLength: 2000 },
+              sources: { type: 'array', minItems: 1, items: {
+                type: 'object', required: ['kind', 'label'], properties: {
+                  kind: { type: 'string', enum: ['feed', 'discovery'] },
+                  label: { type: 'string' },
+                  url: { type: 'string', format: 'uri', description: 'Required for feed sources.' },
+                  required: { type: 'boolean' },
+                  queries: { type: 'array', items: { type: 'string' }, description: 'Required for discovery sources.' },
+                  includeDomains: { type: 'array', items: { type: 'string' } },
+                  excludeDomains: { type: 'array', items: { type: 'string' } },
+                },
+              } },
+              cadence: { type: 'object', required: ['everyMinutes'], properties: { everyMinutes: { type: 'integer', minimum: 5, maximum: 10080 } } },
+              limits: { type: 'object', properties: {
+                maxItemsPerRun: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+                maxCandidatesPerRun: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+              } },
+            },
+          }),
+        }),
+      },
+      '/v1/source-feeds/{sourceFeedId}/runs': {
+        post: operation('Run a source feed now', 'Fans out into the existing bounded source jobs and reuses an active feed run on retry.', {
+          parameters: [sourceFeedIdParameter()],
+        }),
+      },
+      '/v1/source-feeds/{sourceFeedId}/candidates': {
+        get: operation('Read source-feed candidates', 'Returns the existing neutral PublicSignal contract, scoped to this feed.', {
+          parameters: [sourceFeedIdParameter(),
+            { name: 'since', in: 'query', schema: { type: 'string', format: 'date-time' } },
+            { name: 'statuses', in: 'query', schema: { type: 'string' } },
+            { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
+        }),
+      },
+      '/v1/source-feeds/{sourceFeedId}/health': {
+        get: operation('Inspect source-feed health', 'Returns feed-specific source failures, latest run state, and candidate freshness.', {
+          parameters: [sourceFeedIdParameter()],
+        }),
+      },
+      '/v1/source-feed-runs/{runId}': {
+        get: operation('Inspect a source-feed run', 'Derives the feed-run state from its existing durable source jobs.', {
+          parameters: [{ name: 'runId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
         }),
       },
       '/v1/sources': {
@@ -156,7 +207,7 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
 export function agentGuide(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'selfService'>): string {
   return `# SourceFoundry agent guide
 
-SourceFoundry turns RSS, Atom, web discovery, and approved provider searches into one normalized evidence contract. It is a source-management utility, not a reader-facing news product.
+SourceFoundry turns RSS, Atom, and approved provider discovery into durable, recurring candidate supply. It operates collection and source health; the consuming product owns interpretation, ranking, writing, and publication.
 
 ## Connect
 
@@ -166,13 +217,16 @@ SourceFoundry turns RSS, Atom, web discovery, and approved provider searches int
 - Create a workspace: \`POST /v1/agent-enrollments\` with a unique \`slug\`, \`name\`, and optional \`agentLabel\`. The returned token is shown once; store it as \`SOURCEFOUNDRY_API_TOKEN\`.
 - Authentication: send \`Authorization: Bearer $SOURCEFOUNDRY_API_TOKEN\` from the agent runtime secret store.
 
-## Configure and use
+## Build and use a source feed
 
 1. Read \`/v1/meta\` to confirm the service contract.
 2. Create an autonomous workspace with \`POST /v1/agent-enrollments\`; keep the returned \`tenant.id\` and token.
-3. Create or update sources with \`POST /v1/sources\`. Repeating the same tenant and URL updates the source rather than duplicating it.
-4. Enqueue a fetch with \`POST /v1/ingest/source\`. If an active job already exists, reuse its job ID.
-5. Retrieve normalized evidence with \`GET /v1/signals?tenant=<slug>\`.
+3. Call \`POST /v1/source-feeds\` with a stable \`Idempotency-Key\`, a purpose, exact feeds and/or one bounded discovery source, cadence, and limits.
+4. Enqueue collection with \`POST /v1/source-feeds/{sourceFeedId}/runs\`. A retry reuses the active feed run and its source jobs.
+5. Retrieve neutral candidates with \`GET /v1/source-feeds/{sourceFeedId}/candidates\`; use \`since\` for incremental sync.
+6. Inspect required-source failures and freshness with \`GET /v1/source-feeds/{sourceFeedId}/health\`.
+
+The lower-level source and job endpoints remain available for existing integrations, but new agents should normally use source feeds.
 
 ## First useful source
 
@@ -237,6 +291,10 @@ function jsonBody(schema: Record<string, unknown>): Record<string, unknown> {
 
 function tenantParameter(): Record<string, unknown> {
   return { name: 'tenant', in: 'query', schema: { type: 'string', example: 'acme-research' } };
+}
+
+function sourceFeedIdParameter(): Record<string, unknown> {
+  return { name: 'sourceFeedId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } };
 }
 
 function tenantIdParameter(): Record<string, unknown> {

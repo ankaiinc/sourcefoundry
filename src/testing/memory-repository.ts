@@ -10,6 +10,10 @@ import type {
   SignalJob,
   SignalSource,
   SignalTenant,
+  SourceFeed,
+  SourceFeedHealth,
+  SourceFeedRun,
+  SourceFeedSource,
   SourceItem,
   SourceItemInput,
 } from '../types.js';
@@ -35,6 +39,9 @@ export class MemorySignalRepository implements SignalRepository {
   readonly jobs = new Map<string, MemoryJob>();
   readonly items = new Map<string, SourceItem>();
   readonly candidates = new Map<string, PublicSignal>();
+  readonly sourceFeeds = new Map<string, SourceFeed>();
+  readonly sourceFeedSources = new Map<string, SourceFeedSource[]>();
+  readonly sourceFeedRuns = new Map<string, SourceFeedRun>();
   readonly attempts: FetchAttemptInput[] = [];
   readonly heartbeats: HeartbeatInput[] = [];
 
@@ -194,6 +201,122 @@ export class MemorySignalRepository implements SignalRepository {
 
   async getSource(sourceId: string): Promise<SignalSource | null> {
     return this.sources.get(sourceId) ?? null;
+  }
+
+  async upsertSourceFeed(input: {
+    tenantId: string;
+    idempotencyKey: string;
+    name: string;
+    purpose: string;
+    everyMinutes: number;
+    maxItemsPerRun: number;
+    maxCandidatesPerRun: number;
+  }): Promise<SourceFeed> {
+    const existing = Array.from(this.sourceFeeds.values()).find(
+      (feed) => feed.tenantId === input.tenantId && feed.idempotencyKey === input.idempotencyKey,
+    );
+    const now = new Date().toISOString();
+    const feed: SourceFeed = {
+      id: existing?.id ?? this.id('feed'),
+      tenantId: input.tenantId,
+      idempotencyKey: input.idempotencyKey,
+      name: input.name,
+      purpose: input.purpose,
+      status: existing?.status ?? 'active',
+      everyMinutes: input.everyMinutes,
+      maxItemsPerRun: input.maxItemsPerRun,
+      maxCandidatesPerRun: input.maxCandidatesPerRun,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    this.sourceFeeds.set(feed.id, feed);
+    return feed;
+  }
+
+  async replaceSourceFeedSources(sourceFeedId: string, sources: SourceFeedSource[]): Promise<void> {
+    this.sourceFeedSources.set(sourceFeedId, sources.map((source) => ({ ...source })));
+  }
+
+  async getSourceFeed(sourceFeedId: string): Promise<SourceFeed | null> {
+    return this.sourceFeeds.get(sourceFeedId) ?? null;
+  }
+
+  async listSourceFeedSources(sourceFeedId: string): Promise<Array<SourceFeedSource & { source: SignalSource }>> {
+    return (this.sourceFeedSources.get(sourceFeedId) ?? []).flatMap((membership) => {
+      const source = this.sources.get(membership.sourceId);
+      return source ? [{ ...membership, source }] : [];
+    });
+  }
+
+  async createSourceFeedRun(input: { tenantId: string; sourceFeedId: string; jobIds: string[] }): Promise<SourceFeedRun> {
+    const run: SourceFeedRun = {
+      id: this.id('feed_run'),
+      tenantId: input.tenantId,
+      sourceFeedId: input.sourceFeedId,
+      status: 'queued',
+      jobIds: [...new Set(input.jobIds)],
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    };
+    this.sourceFeedRuns.set(run.id, run);
+    return run;
+  }
+
+  async getActiveSourceFeedRun(sourceFeedId: string): Promise<SourceFeedRun | null> {
+    const runs = Array.from(this.sourceFeedRuns.values())
+      .filter((run) => run.sourceFeedId === sourceFeedId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    for (const stored of runs) {
+      const run = await this.getSourceFeedRun(stored.id);
+      if (run?.status === 'queued' || run?.status === 'collecting') return run;
+    }
+    return null;
+  }
+
+  async getSourceFeedRun(runId: string): Promise<SourceFeedRun | null> {
+    const run = this.sourceFeedRuns.get(runId);
+    if (!run) return null;
+    const statuses = run.jobIds.map((id) => this.jobs.get(id)?.status ?? 'failed');
+    const terminal = statuses.every((status) => status === 'completed' || status === 'failed');
+    const completed = statuses.filter((status) => status === 'completed').length;
+    const failed = statuses.filter((status) => status === 'failed').length;
+    return {
+      ...run,
+      status: statuses.some((status) => status === 'running') ? 'collecting'
+        : !terminal ? 'queued'
+          : failed === 0 ? 'completed'
+            : completed > 0 ? 'partial' : 'failed',
+      completedAt: terminal ? new Date().toISOString() : null,
+    };
+  }
+
+  async getSourceFeedHealth(sourceFeedId: string): Promise<SourceFeedHealth | null> {
+    if (!this.sourceFeeds.has(sourceFeedId)) return null;
+    const memberships = await this.listSourceFeedSources(sourceFeedId);
+    const latestStored = Array.from(this.sourceFeedRuns.values())
+      .filter((run) => run.sourceFeedId === sourceFeedId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    const lastRun = latestStored ? await this.getSourceFeedRun(latestStored.id) : null;
+    const sourceIds = new Set(memberships.map((membership) => membership.sourceId));
+    const newestCandidateAt = Array.from(this.candidates.values())
+      .filter((candidate) => sourceIds.has(candidate.source.id))
+      .map((candidate) => candidate.generatedAt)
+      .sort().at(-1) ?? null;
+    const degraded = memberships.some((membership) => membership.required && membership.source.failureCount > 0)
+      || lastRun?.status === 'partial' || lastRun?.status === 'failed';
+    return {
+      sourceFeedId,
+      status: !lastRun ? 'never_run' : degraded ? 'degraded' : 'healthy',
+      newestCandidateAt,
+      lastRun,
+      sources: memberships.map((membership) => ({
+        source: membership.source,
+        required: membership.required,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        nextFetchAt: null,
+      })),
+    };
   }
 
   async enqueueSourceFetch(
@@ -483,15 +606,23 @@ export class MemorySignalRepository implements SignalRepository {
   async listSignals(input: {
     tenantSlug?: string;
     tenantId?: string;
+    sourceFeedId?: string;
+    since?: string;
     statuses: string[];
     limit: number;
   }): Promise<PublicSignal[]> {
     const tenantId =
       input.tenantId ??
       Array.from(this.tenants.values()).find((tenant) => tenant.slug === input.tenantSlug)?.id;
+    const sourceIds = input.sourceFeedId
+      ? new Set((this.sourceFeedSources.get(input.sourceFeedId) ?? []).map((membership) => membership.sourceId))
+      : null;
     return aggregatePublicSignals(
       Array.from(this.candidates.values())
-        .filter((candidate) => candidate.tenantId === tenantId && input.statuses.includes(candidate.status)),
+        .filter((candidate) => candidate.tenantId === tenantId
+          && input.statuses.includes(candidate.status)
+          && (!sourceIds || sourceIds.has(candidate.source.id))
+          && (!input.since || candidate.generatedAt > input.since)),
       input.limit,
     );
   }

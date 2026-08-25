@@ -7,7 +7,9 @@ describe('SourceFoundry landing page', () => {
     expect(page).toContain('/v1/agent-enrollments');
     expect(page).toContain('https://sources.4agents.fyi/llms.txt');
     expect(page).toContain('SOURCEFOUNDRY_API_TOKEN');
-    expect(page).toContain('Your sources.<br>One evidence API.');
+    expect(page).toContain('Describe the supply.<br>Keep it flowing.');
+    expect(page).toContain('/v1/source-feeds');
+    expect(page).toContain('Your product owns');
     expect(page).toContain('Evidence capacity');
     expect(page).toContain('Approved source lanes');
     expect(page).toContain('Product of <a href="https://4agents.fyi">4agents.fyi</a>');

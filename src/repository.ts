@@ -9,6 +9,10 @@ import type {
   SignalJob,
   SignalSource,
   SignalTenant,
+  SourceFeed,
+  SourceFeedHealth,
+  SourceFeedRun,
+  SourceFeedSource,
   SourceItem,
   SourceItemInput,
 } from './types.js';
@@ -41,6 +45,22 @@ export interface SignalRepository {
   listSources(input: { tenantSlug?: string; tenantId?: string }): Promise<SignalSource[]>;
   listDueSources(limit: number, now: Date): Promise<SignalSource[]>;
   getSource(sourceId: string): Promise<SignalSource | null>;
+  upsertSourceFeed(input: {
+    tenantId: string;
+    idempotencyKey: string;
+    name: string;
+    purpose: string;
+    everyMinutes: number;
+    maxItemsPerRun: number;
+    maxCandidatesPerRun: number;
+  }): Promise<SourceFeed>;
+  replaceSourceFeedSources(sourceFeedId: string, sources: SourceFeedSource[]): Promise<void>;
+  getSourceFeed(sourceFeedId: string): Promise<SourceFeed | null>;
+  listSourceFeedSources(sourceFeedId: string): Promise<Array<SourceFeedSource & { source: SignalSource }>>;
+  createSourceFeedRun(input: { tenantId: string; sourceFeedId: string; jobIds: string[] }): Promise<SourceFeedRun>;
+  getActiveSourceFeedRun(sourceFeedId: string): Promise<SourceFeedRun | null>;
+  getSourceFeedRun(runId: string): Promise<SourceFeedRun | null>;
+  getSourceFeedHealth(sourceFeedId: string): Promise<SourceFeedHealth | null>;
   enqueueSourceFetch(input: EnqueueSourceJobInput & { agentRunBudget?: { perTenantPerDay: number; serviceTotalPerDay: number } }): Promise<{ jobId: string; created: boolean; limited?: 'tenant_daily' | 'service_daily' }>;
   countAgentManagedJobsSince(since: Date): Promise<number>;
   claimNextJob(input: { jobTypes: string[]; maxAttempts: number }): Promise<SignalJob | null>;
@@ -54,8 +74,24 @@ export interface SignalRepository {
   markSourceFailure(sourceId: string, input: { nextFetchAt: Date; error: string }): Promise<void>;
   upsertSourceItem(input: SourceItemInput): Promise<{ item: SourceItem; inserted: boolean }>;
   upsertCandidate(input: CandidateInput): Promise<void>;
-  listSignals(input: { tenantSlug?: string; tenantId?: string; statuses: string[]; limit: number }): Promise<PublicSignal[]>;
+  listSignals(input: { tenantSlug?: string; tenantId?: string; sourceFeedId?: string; since?: string; statuses: string[]; limit: number }): Promise<PublicSignal[]>;
   writeHeartbeat(input: HeartbeatInput): Promise<void>;
+}
+
+export function toSourceFeed(row: Record<string, unknown>): SourceFeed {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    idempotencyKey: String(row.idempotency_key),
+    name: String(row.name),
+    purpose: String(row.purpose),
+    status: row.status as SourceFeed['status'],
+    everyMinutes: Number(row.every_minutes),
+    maxItemsPerRun: Number(row.max_items_per_run),
+    maxCandidatesPerRun: Number(row.max_candidates_per_run),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
 }
 
 export function toSource(row: Record<string, unknown>): SignalSource {
