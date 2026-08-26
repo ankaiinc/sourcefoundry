@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Dependable, recurring source supply for agents and applications.",
+  "description": "Feedline keeps coding agents supplied with fresh, deduplicated, monitored source feeds.",
   "license": "MIT",
-  "homepage": "https://sources.4agents.fyi",
+  "homepage": "https://feedline.4agents.fyi",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ankaiinc/sourcefoundry.git"

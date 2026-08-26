@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { loadConfig } from './config.js';
 import { AgentSourceLimitError, PostgresSourceFoundryRepository } from './postgres-repository.js';
 import { validateDiscoverySourceConfiguration } from './ingest/discovery.js';
@@ -15,6 +16,7 @@ import {
 } from './agent-discovery.js';
 import { createAgentToken, tokenHash, tokenPrefix, validateAgentSourcePolicy } from './agent-access.js';
 import { landingPage } from './landing.js';
+import { robotsTxt, sitemapXml } from './public-discovery.js';
 import type { AgentCredential, SignalSource, SourceFeed, SourceFeedRun } from './types.js';
 import { buildSourceFeed, enqueueSourceFeedRun, SourceFeedRunLimitError, type SourceFeedSourceRequest } from './source-feeds.js';
 import {
@@ -27,6 +29,8 @@ import type { SourceFoundryErrorCode, SourceFoundryErrorResponse } from './types
 
 const config = loadConfig(process.env, { requireApiToken: true });
 const repo = new PostgresSourceFoundryRepository(config.databaseUrl);
+const feedlineSocialCard = readFileSync(new URL('../../public/feedline-og.png', import.meta.url));
+const feedlineFavicon = readFileSync(new URL('../../public/favicon.svg', import.meta.url));
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -35,6 +39,22 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/') {
       return sendHtml(res, 200, landingPage(config.publicBaseUrl));
+    }
+
+    if (req.method === 'GET' && url.pathname === '/robots.txt') {
+      return sendPublicText(res, 200, robotsTxt(config.publicBaseUrl), 'text/plain; charset=utf-8');
+    }
+
+    if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
+      return sendPublicText(res, 200, sitemapXml(config.publicBaseUrl), 'application/xml; charset=utf-8');
+    }
+
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/feedline-og.png') {
+      return sendPublicAsset(res, 200, feedlineSocialCard, 'image/png', req.method === 'HEAD');
+    }
+
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/favicon.svg') {
+      return sendPublicAsset(res, 200, feedlineFavicon, 'image/svg+xml; charset=utf-8', req.method === 'HEAD');
     }
 
     if (req.method === 'GET' && url.pathname === SOURCEFOUNDRY_DISCOVERY_PATH) {
@@ -100,6 +120,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/v1/agent-enrollments') {
       return enrollAgent(req, res);
+    }
+
+    if (req.method === 'GET' && !url.pathname.startsWith('/v1/')) {
+      return sendHtml(res, 404, '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Not found — Feedline</title></head><body><main><h1>Not found</h1><p><a href="/">Return to Feedline</a></p></main></body></html>');
     }
 
     const access = await authenticate(req);
@@ -475,6 +499,35 @@ function sendText(res: http.ServerResponse, status: number, body: string): void 
   res.end(body);
 }
 
+function sendPublicText(res: http.ServerResponse, status: number, body: string, contentType: string): void {
+  res.writeHead(status, {
+    'content-type': contentType,
+    'cache-control': 'public, max-age=300',
+    'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
+    'x-sourcefoundry-release': config.releaseSha,
+    ...securityHeaders(),
+  });
+  res.end(body);
+}
+
+function sendPublicAsset(
+  res: http.ServerResponse,
+  status: number,
+  body: Buffer,
+  contentType: string,
+  headOnly = false,
+): void {
+  res.writeHead(status, {
+    'content-type': contentType,
+    'content-length': String(body.byteLength),
+    'cache-control': 'public, max-age=31536000, immutable',
+    'x-sourcefoundry-schema-version': String(SOURCEFOUNDRY_SCHEMA_VERSION),
+    'x-sourcefoundry-release': config.releaseSha,
+    ...securityHeaders(),
+  });
+  res.end(headOnly ? undefined : body);
+}
+
 function sendHtml(res: http.ServerResponse, status: number, body: string): void {
   res.writeHead(status, {
     'content-type': 'text/html; charset=utf-8',
@@ -488,7 +541,7 @@ function sendHtml(res: http.ServerResponse, status: number, body: string): void 
 
 function securityHeaders(): Record<string, string> {
   return {
-    'content-security-policy': "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; connect-src 'self'; img-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+    'content-security-policy': "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; connect-src 'self'; font-src https://fonts.gstatic.com; img-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com",
     'cross-origin-opener-policy': 'same-origin',
     'permissions-policy': 'clipboard-write=(self)',
     'referrer-policy': 'no-referrer',

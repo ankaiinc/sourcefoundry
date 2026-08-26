@@ -1,6 +1,6 @@
-# Contributing to SourceFoundry
+# Contributing to Feedline
 
-SourceFoundry is built around one boundary: it supplies durable, neutral source candidates; consuming products own judgment, ranking, writing, and publication.
+Feedline keeps source feeds running; consuming products own judgment, ranking, writing, and publication. The repository and compatibility identifiers retain the SourceFoundry technical name.
 
 ## Before opening a change
 
@@ -18,7 +18,7 @@ npm run build
 docker compose config
 ```
 
-For the complete self-hosted journey, follow [Self-hosting SourceFoundry](docs/self-hosting.md).
+For the complete self-hosted journey, follow [Self-hosting Feedline](docs/self-hosting.md).
 
 Pull requests should explain the user-visible change, the trust or cost boundary affected, and the evidence used to verify it. Contract changes need tests and documentation in the same pull request.
 

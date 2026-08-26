@@ -1,6 +1,6 @@
-# Self-hosting SourceFoundry
+# Self-hosting Feedline
 
-Self-hosting gives an individual, team, or agent its own SourceFoundry service, database, source policy, and provider accounts. The result is the same REST and MCP contract as the hosted service without depending on SourceFoundry's hosted provider keys.
+Self-hosting gives an individual, team, or agent its own Feedline service, database, source policy, and provider accounts. The result is the same REST and MCP contract as the hosted service without depending on Feedline's hosted provider keys.
 
 ## Fast path with Docker Compose
 
@@ -26,7 +26,16 @@ Open <http://localhost:8080> for the human introduction or <http://localhost:808
 
 ## Use MCP against the self-hosted service
 
-After the first public package release:
+Until the npm package is published, run the adapter from the repository root:
+
+```bash
+npm ci --prefix mcp
+SOURCEFOUNDRY_BASE='http://localhost:8080' \
+SOURCEFOUNDRY_API_TOKEN='from-your-secret-store' \
+  node mcp/sourcefoundry-mcp.mjs
+```
+
+After the first npm package release:
 
 ```json
 {

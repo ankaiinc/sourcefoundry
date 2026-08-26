@@ -1,13 +1,25 @@
-# SourceFoundry MCP
+# Feedline MCP
 
-Expose SourceFoundry's durable source-supply API to MCP clients with two tools:
+Connect Feedline to MCP clients with two tools:
 
 - `build_source_feed` creates or updates a recurring source feed and can enqueue its first run.
 - `read_source_feed` returns neutral candidates and optional operational health.
 
 Configure `SOURCEFOUNDRY_API_TOKEN`. Set `SOURCEFOUNDRY_BASE` when using a self-hosted deployment.
 
-After the first public package release:
+## Run from this repository
+
+The npm package has not been published yet. From a public clone:
+
+```bash
+npm ci --prefix mcp
+SOURCEFOUNDRY_API_TOKEN='from-your-secret-store' \
+  node mcp/sourcefoundry-mcp.mjs
+```
+
+Set `SOURCEFOUNDRY_BASE=http://localhost:8080` to connect to a self-hosted service. Without it, the adapter connects to `https://feedline.4agents.fyi`.
+
+After the first npm package release:
 
 ```json
 {
@@ -27,6 +39,6 @@ For a local self-hosted service, add:
 "SOURCEFOUNDRY_BASE": "http://localhost:8080"
 ```
 
-Discovery sources may select `tavily`, `exa`, or `serper`. Provider keys remain in the SourceFoundry worker environment; they are never MCP arguments. Feed-only source supplies need no commercial search provider.
+Discovery sources may select `tavily`, `exa`, or `serper`. Provider keys remain in the Feedline worker environment; they are never MCP arguments. Feed-only source feeds need no commercial search provider.
 
-SourceFoundry supplies fresh, deduplicated candidates with provenance. The consuming application or agent remains responsible for product-specific judgment, writing, ranking, and publication.
+Feedline supplies fresh source items with duplicate results removed and original links preserved. The consuming application or agent remains responsible for judgment, writing, ranking, and publication.

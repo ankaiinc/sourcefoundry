@@ -1,12 +1,14 @@
-# SourceFoundry public source supply v0
+# Feedline public source supply v0
 
 Status: proposed product and interface contract
 Date: 2026-08-25
 Supersedes: the on-demand evidence-request shape drafted earlier on 2026-08-25
 
+Feedline is the public product name. SourceFoundry remains the technical service name in code, environment variables, compatibility headers, and existing API identifiers.
+
 ## Founding purpose
 
-SourceFoundry exists to solve a product supply problem:
+Feedline exists to solve a product supply problem:
 
 > Continuously turn external sources into fresh, reliable, deduplicated
 > candidate inventory that different products can consume and interpret in
@@ -28,15 +30,9 @@ reason for the service to exist.
 
 ## Public promise
 
-Suggested headline:
+> Give your agent a source feed that stays fresh.
 
-> Your product's source supply, continuously operated.
-
-Suggested subhead:
-
-> Describe the external material your product needs. SourceFoundry keeps a
-> fresh, deduplicated, attributable feed ready for your application or agent to
-> interpret.
+Feedline checks RSS feeds and approved search providers on a schedule, removes duplicate results, keeps the original links, and reports source failures. The consuming agent decides what to use, rank, write, or publish.
 
 Suggested agent prompt:
 
@@ -45,8 +41,7 @@ Suggested agent prompt:
 > syndication domains, refresh every hour, and return the newest neutral
 > candidates with links and dates.
 
-The first visible result is a working source feed with current candidates and
-source health—not a generated research answer.
+The first visible result is a working source feed with current items and source health—not a generated research answer.
 
 ## The product boundary
 
@@ -204,8 +199,8 @@ Response:
     "createdAt": "2026-08-25T08:00:00Z",
     "updatedAt": "2026-08-25T08:00:00Z",
     "nextRunAt": "2026-08-25T09:00:00Z",
-    "candidatesUrl": "https://sources.4agents.fyi/v1/source-feeds/sf_01K.../candidates",
-    "healthUrl": "https://sources.4agents.fyi/v1/source-feeds/sf_01K.../health"
+    "candidatesUrl": "https://feedline.4agents.fyi/v1/source-feeds/sf_01K.../candidates",
+    "healthUrl": "https://feedline.4agents.fyi/v1/source-feeds/sf_01K.../health"
   },
   "sourcePlan": {
     "sourceCount": 3,
@@ -233,7 +228,7 @@ retries. It never executes arbitrary provider work in the API process.
     "id": "sfr_01K...",
     "sourceFeedId": "sf_01K...",
     "status": "queued",
-    "statusUrl": "https://sources.4agents.fyi/v1/source-feed-runs/sfr_01K...",
+    "statusUrl": "https://feedline.4agents.fyi/v1/source-feed-runs/sfr_01K...",
     "retryAfterSeconds": 5
   }
 }

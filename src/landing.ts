@@ -2,6 +2,19 @@ const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (charact
 
 export function landingPage(baseUrl: string): string {
   const origin = escapeHtml(baseUrl);
+  const socialImage = `${origin}/feedline-og.png`;
+  const structuredData = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'Feedline',
+    alternateName: 'SourceFoundry',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Any',
+    description: 'Feedline continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents.',
+    url: baseUrl,
+    codeRepository: 'https://github.com/ankaiinc/sourcefoundry',
+    license: 'https://opensource.org/license/mit',
+  }).replace(/</g, '\\u003c');
   const agentPrompt = `Open ${baseUrl}/agent.md. Set up Feedline, store SOURCEFOUNDRY_API_TOKEN in your secret store, then build a recurring source feed from the sources I describe. Run it and return new source items with links, dates, original sources, completeness, and source health. Do not rank, summarize, or publish unless I ask.`;
   const escapedPrompt = escapeHtml(agentPrompt);
 
@@ -11,13 +24,31 @@ export function landingPage(baseUrl: string): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Feedline continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents." />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="theme-color" content="#F6F8FB" />
+  <link rel="canonical" href="${origin}/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Feedline" />
+  <meta property="og:title" content="Feedline — source feeds that stay fresh" />
+  <meta property="og:description" content="Continuously collect, clean, and monitor sources for news feeds, trackers, briefs, and research agents." />
+  <meta property="og:url" content="${origin}/" />
+  <meta property="og:image" content="${socialImage}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Feedline conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Feedline — source feeds that stay fresh" />
+  <meta name="twitter:description" content="Continuously collect, clean, and monitor sources for news feeds, trackers, briefs, and research agents." />
+  <meta name="twitter:image" content="${socialImage}" />
+  <meta name="twitter:image:alt" content="Feedline conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
+  <link rel="icon" href="${origin}/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400..700&amp;family=Spline+Sans+Mono:wght@400..700&amp;display=swap" rel="stylesheet" />
   <link rel="alternate" type="text/markdown" href="${origin}/agent.md" title="Feedline agent guide" />
   <link rel="alternate" type="text/plain" href="${origin}/llms.txt" title="Feedline LLM instructions" />
   <title>Feedline — source supply for agents</title>
+  <script type="application/ld+json">${structuredData}</script>
   <style>
     :root {
       --canvas:#f6f8fb;

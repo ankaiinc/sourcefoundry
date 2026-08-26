@@ -1,6 +1,6 @@
-# Operating SourceFoundry
+# Operating Feedline
 
-This guide covers the service-level jobs that remain important after installation. Product-specific source lists and ranking rules belong in consuming applications, not in SourceFoundry itself.
+This guide covers the service-level jobs that remain important after installation. Product-specific source lists and ranking rules belong in consuming applications, not in Feedline itself.
 
 ## Processes and health
 
@@ -51,4 +51,4 @@ It exits non-zero unless Supabase advertises a completed hosted backup or physic
 
 Provider keys are worker-only secrets. Source definitions name the provider policy; they never store the key. Each source should declare a bounded cadence and result cap. Before enabling a paid provider, verify its account terms, quota, and expected monthly ceiling.
 
-The existing `bootstrap:pl` and `bootstrap:attention` commands are operator examples for current internal consumers. Both are dry-run or explicit-confirmation workflows. They are not required for a generic SourceFoundry installation.
+The existing `bootstrap:pl` and `bootstrap:attention` commands are operator examples for current internal consumers. Both are dry-run or explicit-confirmation workflows. They are not required for a generic Feedline installation.

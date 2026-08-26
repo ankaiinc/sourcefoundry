@@ -1,6 +1,6 @@
 # Code of Conduct
 
-We want SourceFoundry to be a useful, respectful place to build public infrastructure.
+We want Feedline to be a useful, respectful place to build open source infrastructure.
 
 Be considerate. Discuss the work, not the person. Do not harass, threaten, demean, or discriminate. Do not publish another person's private information. Maintainers may edit or remove contributions and restrict participation when conduct makes the project unsafe or unproductive.
 

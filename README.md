@@ -1,16 +1,18 @@
-# SourceFoundry
+# Feedline
 
-Dependable, recurring source supply for agents and applications.
+Give your coding agent a source feed that stays fresh.
 
-Describe the material you need once. SourceFoundry keeps collecting it, normalizes every result into one evidence contract, removes repetition, records provenance, and tells you when a source is stale or failing. Your agent or product remains responsible for interpretation, ranking, writing, workflow, and publication.
+Feedline continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Coding agents use those results to build news feeds, market trackers, daily briefs, policy monitors, and research streams.
 
-[Hosted service](https://sources.4agents.fyi) · [Agent guide](https://sources.4agents.fyi/agent.md) · [OpenAPI](https://sources.4agents.fyi/openapi.json) · [Self-hosting](docs/self-hosting.md) · [Operations](docs/operations.md) · [MCP package](mcp/README.md)
+[Hosted service](https://feedline.4agents.fyi) · [Agent guide](https://feedline.4agents.fyi/agent.md) · [OpenAPI](https://feedline.4agents.fyi/openapi.json) · [Self-hosting](docs/self-hosting.md) · [Operations](docs/operations.md) · [MCP](mcp/README.md)
+
+Feedline is the public product name. The repository, API token, environment variables, and compatibility headers retain the SourceFoundry technical name.
 
 ## Why this exists
 
-SourceFoundry was created because every consuming product was rebuilding the same fragile source plumbing: feed polling, provider calls, scheduling, retries, deduplication, freshness checks, provenance, and source-health tracking. That work does not make an agent smarter. It makes its evidence supply dependable.
+Feedline was created because every news feed and tracking product was rebuilding the same fragile source operation: checking feeds, calling search providers, scheduling runs, retrying failures, removing duplicates, preserving links, and noticing stale sources. That work does not make the product better. It only keeps its inputs available.
 
-SourceFoundry is not an answer engine and it does not decide what is true or important. It separates source operations from judgment so the same neutral evidence can support a research agent, newsroom, policy monitor, competitive-intelligence product, or internal workflow without forcing each one to run a second ingestion system.
+Feedline is not an answer engine and it does not decide what is true or important. It keeps sources running; the consuming agent decides what to use, rank, write, or publish.
 
 ## When to use it
 
@@ -20,23 +22,23 @@ SourceFoundry is not an answer engine and it does not decide what is true or imp
 - Several products need the same collected evidence but apply different rankings or conclusions.
 - A team needs to know that a source failed, went stale, or returned incomplete data instead of silently treating an empty response as “nothing happened.”
 
-Do not use SourceFoundry for a one-off question, for final editorial judgment, or as permission to scrape or resell material you are not authorized to use.
+Do not use Feedline for a one-off question, for final editorial judgment, or as permission to collect or resell content you are not authorized to use.
 
 ## What is different
 
-| Alternative | What it does well | What SourceFoundry adds |
+| Alternative | What it does well | What Feedline adds |
 |---|---|---|
 | Tavily, Exa, Serper | Search now | Recurring feeds, provider choice, durable runs, deduplication, provenance, health, and one stable output contract |
 | RSS reader | Follows known feeds | Search discovery, multi-tenant operation, API/MCP access, evidence normalization, retries, and source health |
-| Scraping tool | Fetches or extracts pages | Scheduling, cross-source identity, durable candidate supply, and consumer-neutral delivery |
+| Scraping tool | Fetches or extracts pages | Scheduling, duplicate removal, recurring delivery, and visible source failures |
 | Agent framework | Orchestrates an agent | A source-supply service the agent can rely on without owning ingestion mechanics |
-| Custom cron jobs | Solve one narrow collection task | Reusable contracts, idempotency, tenant isolation, bounded costs, and operational evidence |
+| Custom cron jobs | Solve one narrow collection task | Reusable feeds, safe retries, tenant isolation, bounded costs, and visible failures |
 
-The useful difference is not “we search too.” It is that search, feeds, and future authorized connectors become one operated supply that an agent can build once and read incrementally.
+The useful difference is not “we search too.” It is that feeds and search providers become one recurring source feed that an agent can set up once and read incrementally.
 
 ## Run it yourself
 
-Self-hosting is the default open-source path. You own the infrastructure and bring any search-provider account you choose to use.
+Self-hosting gives you the same REST and MCP workflow on your own infrastructure. You bring any search-provider account you choose to use.
 
 ```bash
 cp .env.example .env
@@ -50,7 +52,7 @@ Then open <http://localhost:8080>, read <http://localhost:8080/agent.md>, or che
 curl -fsS http://localhost:8080/ready
 ```
 
-Feed-only installations need no search-provider key. For bounded discovery, set `TAVILY_API_KEY`, `EXA_API_KEY`, or `SERPER_API_KEY` in the worker environment and select that provider on the discovery source. See [Self-hosting SourceFoundry](docs/self-hosting.md) and [Provider keys and licensing](docs/provider-keys.md).
+Feed-only installations need no search-provider key. For search discovery, set `TAVILY_API_KEY`, `EXA_API_KEY`, or `SERPER_API_KEY` in the worker environment and select that provider on the discovery source. See [Self-hosting Feedline](docs/self-hosting.md) and [Provider keys and licensing](docs/provider-keys.md).
 
 ## The high-level API
 
@@ -72,19 +74,19 @@ Example discovery source:
 }
 ```
 
-The provider key is never sent in this request. It stays in the SourceFoundry worker's secret environment.
+The provider key is never sent in this request. It stays in the Feedline worker's secret environment.
 
 ## MCP
 
-The `@sourcefoundry/mcp` package exposes two high-level tools: `build_source_feed` and `read_source_feed`.
+The MCP adapter exposes two high-level tools: `build_source_feed` and `read_source_feed`.
 
-The REST API is the stable product boundary; MCP is the agent-friendly adapter. See [mcp/README.md](mcp/README.md) for hosted and self-hosted configuration.
+The REST API is the stable product boundary; MCP is the agent-friendly adapter. Until the first npm release, run the adapter from this repository. See [mcp/README.md](mcp/README.md) for hosted and self-hosted configuration.
 
 ## Provider and licensing boundary
 
-The SourceFoundry code is MIT licensed. Tavily, Exa, Serper, publishers, and other upstream sources keep their own terms, quotas, and content rights. Open source does not transfer those rights or make a shared commercial provider key safe to redistribute.
+The Feedline code is MIT licensed. Tavily, Exa, Serper, publishers, and other upstream sources keep their own terms, quotas, and content rights. Open source does not transfer those rights or make a shared commercial provider key safe to redistribute.
 
-For self-hosting, the operator supplies keys for accounts they are authorized to use and is responsible for the upstream terms. A hosted SourceFoundry service should use provider lanes covered by its own commercial agreements or an encrypted customer-managed provider connection. Raw provider keys must never enter prompts, feed definitions, logs, or returned candidates.
+For self-hosting, the operator supplies keys for accounts they are authorized to use and is responsible for the upstream terms. A hosted Feedline service should use provider lanes covered by its own commercial agreements or an encrypted customer-managed provider connection. Raw provider keys must never enter prompts, feed definitions, logs, or returned candidates.
 
 ## Architecture
 

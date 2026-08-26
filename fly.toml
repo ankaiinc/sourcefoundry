@@ -4,10 +4,15 @@ primary_region = "sin"
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  release_command = "node dist/src/migrate.js"
+  strategy = "rolling"
+  max_unavailable = 1
+
 [env]
   NODE_ENV = "production"
   SOURCEFOUNDRY_PORT = "8080"
-  SOURCEFOUNDRY_PUBLIC_BASE_URL = "https://sources.4agents.fyi"
+  SOURCEFOUNDRY_PUBLIC_BASE_URL = "https://feedline.4agents.fyi"
   SOURCEFOUNDRY_WORKER_INTERVAL_MS = "30000"
   SOURCEFOUNDRY_WORKER_CONCURRENCY = "3"
   SOURCEFOUNDRY_STALE_JOB_MINUTES = "30"

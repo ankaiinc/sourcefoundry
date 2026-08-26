@@ -1,4 +1,6 @@
-# SourceFoundry public agent service v0
+# Feedline public agent service v0 (superseded)
+
+Feedline is the public product name. SourceFoundry remains the technical service name used by the original draft and compatibility identifiers.
 
 This draft was superseded on 2026-08-25 after reviewing SourceFoundry's founding
 conversation, architecture note, and initial implementation boundary.
