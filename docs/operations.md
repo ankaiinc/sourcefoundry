@@ -16,6 +16,12 @@ Run `npm run migrate` once before replacing API and worker processes. The runner
 
 The `supabase/migrations/` directory remains the hosted Supabase history. Do not edit an already-applied Supabase migration. Portable self-hosted migrations live in `migrations/`.
 
+## Database TLS
+
+Remote PostgreSQL certificates are verified by default. Set `SOURCEFOUNDRY_DATABASE_CA_FILE` to a mounted PEM certificate when the database uses a private certificate authority. Do not disable certificate verification in production.
+
+The checked-in Fly configuration points this setting at Supabase's public root certificate in [`certs/`](../certs/README.md). Its provenance, fingerprint, expiry, and rotation procedure are recorded beside the certificate. Other deployments should mount the certificate issued by their own database provider and override the path.
+
 ## Duplicate-job reconciliation
 
 The reconciliation command is dry-run by default:
