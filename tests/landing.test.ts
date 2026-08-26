@@ -17,5 +17,9 @@ describe('SourceFoundry landing page', () => {
     expect(page).toContain('Tavily, Exa, or Serper');
     expect(page).toContain('https://github.com/ankaiinc/sourcefoundry');
     expect(page).not.toContain('id="enrollment"');
+
+    const scripts = [...page.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((match) => match[1]!);
+    expect(scripts.length).toBeGreaterThan(0);
+    for (const script of scripts) expect(() => new Function(script)).not.toThrow();
   });
 });

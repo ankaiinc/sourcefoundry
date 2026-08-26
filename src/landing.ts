@@ -18,7 +18,6 @@ export function landingPage(baseUrl: string): string {
   <link rel="alternate" type="text/markdown" href="${origin}/agent.md" title="Feedline agent guide" />
   <link rel="alternate" type="text/plain" href="${origin}/llms.txt" title="Feedline LLM instructions" />
   <title>Feedline — source supply for agents</title>
-  <script>document.documentElement.classList.add('js')</script>
   <style>
     :root {
       --canvas:#f6f8fb;
@@ -136,10 +135,10 @@ export function landingPage(baseUrl: string): string {
     .output-tab.active { font-weight:650; }
     .output-tab.active span:last-child { color:var(--blue); }
     .output-display { position:relative; min-height:470px; padding:48px 52px; overflow:hidden; border:1px solid var(--steel); border-radius:10px; background:var(--canvas); }
-    .output-display:before { content:""; position:absolute; left:0; right:0; top:134px; height:3px; background:var(--blue); }
-    .output-display:after { content:""; position:absolute; right:54px; top:126px; width:18px; height:18px; background:var(--blue); clip-path:polygon(0 0,100% 50%,0 100%); }
     .output-kicker { color:var(--blue-dark); font-family:"Spline Sans Mono",SFMono-Regular,Consolas,monospace; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
-    .output-display h3 { max-width:620px; margin:24px 0 76px; font-size:clamp(36px,4vw,62px); font-weight:640; letter-spacing:-.05em; line-height:1.03; }
+    .output-display h3 { max-width:620px; margin:24px 0 36px; font-size:clamp(36px,4vw,62px); font-weight:640; letter-spacing:-.05em; line-height:1.03; }
+    .output-rail { position:relative; height:3px; margin:0 -52px 54px; background:var(--blue); }
+    .output-rail:after { content:""; position:absolute; right:52px; top:-7px; width:18px; height:18px; background:var(--blue); clip-path:polygon(0 0,100% 50%,0 100%); }
     .output-details { display:grid; grid-template-columns:1fr 1fr; gap:30px; }
     .output-detail { padding-top:15px; border-top:1px solid var(--steel); }
     .output-detail span { display:block; margin-bottom:9px; color:var(--muted); font-family:"Spline Sans Mono",SFMono-Regular,Consolas,monospace; font-size:10px; letter-spacing:.05em; text-transform:uppercase; }
@@ -203,12 +202,9 @@ export function landingPage(baseUrl: string): string {
     .footer-links { display:flex; flex-wrap:wrap; gap:22px; }
     .footer-note { max-width:580px; }
 
-    .js .reveal { opacity:0; transform:translateY(18px); transition:opacity .7s ease,transform .7s ease; }
-    .js .reveal.is-visible { opacity:1; transform:none; }
     @media (prefers-reduced-motion:reduce) {
       html { scroll-behavior:auto; }
       *,*:before,*:after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; }
-      .js .reveal { opacity:1; transform:none; }
     }
     @media (max-width:980px) {
       .shell { width:min(100% - 40px,var(--max)); }
@@ -268,9 +264,9 @@ export function landingPage(baseUrl: string): string {
       .equation-side { min-height:0; padding:28px 24px; }
       .output-tabs { grid-template-columns:1fr; }
       .output-display { min-height:520px; padding:32px 24px; }
-      .output-display:before { top:156px; }
-      .output-display:after { top:148px; right:24px; }
-      .output-display h3 { margin-bottom:90px; }
+      .output-display h3 { margin-bottom:30px; }
+      .output-rail { margin:0 -24px 42px; }
+      .output-rail:after { right:24px; }
       .output-details { grid-template-columns:1fr; }
       .candidate-label { right:24px; bottom:24px; }
       .compare-side { min-height:380px; padding:28px 24px; }
@@ -412,6 +408,7 @@ export function landingPage(baseUrl: string): string {
           <div class="output-display" aria-live="polite">
             <span class="output-kicker">Finished product · owned by your agent</span>
             <h3 id="output-name">A news product that does not wake up empty.</h3>
+            <div class="output-rail" aria-hidden="true"></div>
             <div class="output-details">
               <div class="output-detail"><span>Material entering</span><strong id="output-input">Publisher feeds, official sources, and bounded discovery</strong></div>
               <div class="output-detail"><span>Feedline supplies</span><strong id="output-supply">Fresh candidate stories with canonical links and provenance</strong></div>
@@ -499,7 +496,7 @@ Do not rank, summarize, or publish unless I ask.</pre>
     const outputs = {
       news: { name:'A news product that does not wake up empty.', input:'Publisher feeds, official sources, and bounded discovery', supply:'Fresh candidate stories with canonical links and provenance', agent:'Editorial selection, ranking, summaries, and presentation', burden:'Polling, duplicate announcements, stale feeds, and hidden failures' },
       market: { name:'A market tracker that remembers yesterday.', input:'Competitor blogs, filings, changelogs, and industry sources', supply:'New evidence since the last run in one stable contract', agent:'Materiality judgment, company mapping, alerts, and analysis', burden:'Repeated searches, provider response parsing, and cross-source identity' },
-      brief: { name:'A briefing that has fresh material every morning.', input:'A creator\'s trusted source list plus selected discovery queries', supply:'Deduplicated candidates ready for selection and commentary', agent:'Point of view, narrative, format, voice, and publication', burden:'Tab collecting, link bookkeeping, repeated stories, and dead feeds' },
+      brief: { name:'A briefing that has fresh material every morning.', input:'A creator’s trusted source list plus selected discovery queries', supply:'Deduplicated candidates ready for selection and commentary', agent:'Point of view, narrative, format, voice, and publication', burden:'Tab collecting, link bookkeeping, repeated stories, and dead feeds' },
       policy: { name:'A policy watch that never loses the official source.', input:'Government feeds, official pages, and bounded reactions', supply:'Traceable policy candidates with source and run health', agent:'Legal interpretation, consequence, audience relevance, and escalation', burden:'Source checking, missing updates, provenance gaps, and silent stalls' },
       research: { name:'A research stream that does not restart from zero.', input:'Known evidence sources and repeatable discovery boundaries', supply:'Incremental neutral candidates with dates and completeness', agent:'Hypotheses, synthesis, confidence, citations, and conclusions', burden:'Fresh searches, duplicate review, provider lock-in, and lost context' }
     };
@@ -521,10 +518,6 @@ Do not rank, summarize, or publish unless I ask.</pre>
       clearTimeout(copyTimer); copyStatus.style.opacity='1'; copyStatus.style.transform='translate(-50%,0)';
       copyTimer=setTimeout(() => { copyStatus.style.opacity='0'; copyStatus.style.transform='translate(-50%,20px)'; },1800);
     }));
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const observer = new IntersectionObserver((entries) => entries.forEach((entry) => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); } }), { threshold:.12 });
-      document.querySelectorAll('.reveal').forEach((item) => observer.observe(item));
-    } else document.querySelectorAll('.reveal').forEach((item) => item.classList.add('is-visible'));
   </script>
 </body>
 </html>`;
