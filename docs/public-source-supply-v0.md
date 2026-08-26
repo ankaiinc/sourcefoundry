@@ -199,8 +199,8 @@ Response:
     "createdAt": "2026-08-25T08:00:00Z",
     "updatedAt": "2026-08-25T08:00:00Z",
     "nextRunAt": "2026-08-25T09:00:00Z",
-    "candidatesUrl": "https://feedline.4agents.fyi/v1/source-feeds/sf_01K.../candidates",
-    "healthUrl": "https://feedline.4agents.fyi/v1/source-feeds/sf_01K.../health"
+    "candidatesUrl": "https://sourcefoundry.4agents.fyi/v1/source-feeds/sf_01K.../candidates",
+    "healthUrl": "https://sourcefoundry.4agents.fyi/v1/source-feeds/sf_01K.../health"
   },
   "sourcePlan": {
     "sourceCount": 3,
@@ -228,7 +228,7 @@ retries. It never executes arbitrary provider work in the API process.
     "id": "sfr_01K...",
     "sourceFeedId": "sf_01K...",
     "status": "queued",
-    "statusUrl": "https://feedline.4agents.fyi/v1/source-feed-runs/sfr_01K...",
+    "statusUrl": "https://sourcefoundry.4agents.fyi/v1/source-feed-runs/sfr_01K...",
     "retryAfterSeconds": 5
   }
 }

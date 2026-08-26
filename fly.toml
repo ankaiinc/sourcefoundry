@@ -12,7 +12,7 @@ primary_region = "sin"
 [env]
   NODE_ENV = "production"
   SOURCEFOUNDRY_PORT = "8080"
-  SOURCEFOUNDRY_PUBLIC_BASE_URL = "https://feedline.4agents.fyi"
+  SOURCEFOUNDRY_PUBLIC_BASE_URL = "https://sourcefoundry.4agents.fyi"
   SOURCEFOUNDRY_DATABASE_CA_FILE = "/app/certs/supabase-prod-ca-2021.crt"
   SOURCEFOUNDRY_WORKER_INTERVAL_MS = "30000"
   SOURCEFOUNDRY_WORKER_CONCURRENCY = "3"

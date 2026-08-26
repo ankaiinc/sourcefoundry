@@ -4,7 +4,7 @@ Give your coding agent a source feed that stays fresh.
 
 SourceFoundry continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Coding agents use those results to build news feeds, market trackers, daily briefs, policy monitors, and research streams.
 
-[Hosted service](https://feedline.4agents.fyi) · [Agent guide](https://feedline.4agents.fyi/agent.md) · [OpenAPI](https://feedline.4agents.fyi/openapi.json) · [Self-hosting](docs/self-hosting.md) · [Operations](docs/operations.md) · [MCP](mcp/README.md)
+[Hosted service](https://sourcefoundry.4agents.fyi) · [Agent guide](https://sourcefoundry.4agents.fyi/agent.md) · [OpenAPI](https://sourcefoundry.4agents.fyi/openapi.json) · [Self-hosting](docs/self-hosting.md) · [Operations](docs/operations.md) · [MCP](mcp/README.md)
 
 ## Why this exists
 
