@@ -27,6 +27,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && env.RELEASE_VERSION || github.ref }}
 
       - name: Verify release tag matches this commit
         shell: bash
@@ -35,7 +36,9 @@ jobs:
             v[0-9]*.[0-9]*.[0-9]*) ;;
             *) echo "Invalid release version: $RELEASE_VERSION" >&2; exit 1 ;;
           esac
-          test "$(git rev-parse "${RELEASE_VERSION}^{commit}")" = "$GITHUB_SHA"
+          release_sha="$(git rev-parse "${RELEASE_VERSION}^{commit}")"
+          test "$(git rev-parse HEAD)" = "$release_sha"
+          echo "RELEASE_SHA=$release_sha" >> "$GITHUB_ENV"
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -73,7 +76,7 @@ jobs:
           context: .
           push: true
           build-args: |
-            SOURCEFOUNDRY_RELEASE_SHA=${{ github.sha }}
+            SOURCEFOUNDRY_RELEASE_SHA=${{ env.RELEASE_SHA }}
           tags: |
             ghcr.io/ankaiinc/sourcefoundry:${{ env.RELEASE_VERSION }}
             ghcr.io/ankaiinc/sourcefoundry:latest
