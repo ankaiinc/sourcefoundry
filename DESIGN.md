@@ -1,13 +1,13 @@
-# Feedline design language
+# SourceFoundry design language
 
-This document translates [the Feedline brand system](BRAND.md) into enforceable visual and interaction rules. It is a system for an operated source-supply line—not a generic developer-tool skin and not a factory theme.
+This document translates [the SourceFoundry brand system](BRAND.md) into enforceable visual and interaction rules. It is a system for an operated source-supply line—not a generic developer-tool skin and not a factory theme.
 
 ## Design intent
 
 An agent should understand three things before reading the API documentation:
 
 1. varied source material enters;
-2. Feedline continuously inspects, cleans, labels, and monitors it;
+2. SourceFoundry continuously inspects, cleans, labels, and monitors it;
 3. usable candidates continue toward a product the agent creates.
 
 The interface should feel calm under load, exact about state, and visibly alive.
@@ -34,7 +34,7 @@ Construct the mark from:
 
 The mark must work in one color at 16 px and in motion at large sizes. The reject path may use semantic red only when it represents an actual rejected state. Do not run a decorative conveyor through the letters of the wordmark.
 
-Use `Feedline` as the wordmark while the name remains under review. Lowercase `feedline` may be explored, but should not be used merely to mimic developer-tool conventions.
+Use `SourceFoundry` as the wordmark. Keep that spelling and capitalization consistent across every public surface.
 
 ## Color system
 
@@ -109,7 +109,7 @@ The page behaves like a line with stages, not a stack of interchangeable SaaS ba
 - Let a rail connect hero, mechanism, use cases, proof, and final action.
 - Attach explanations to positions on the line rather than putting everything into equal cards.
 - Use asymmetry around the rail: material can enter from several points and reject lanes can leave the main composition.
-- Give the finished products—news feed, tracker, brief, research agent—more visual prominence than internal Feedline controls.
+- Give the finished products—news feed, tracker, brief, research agent—more visual prominence than internal SourceFoundry controls.
 - Keep body content on a readable inner measure even when the line spans the viewport.
 
 On mobile, preserve sequence rather than miniature complexity. Convert the rail to a vertical timeline and keep reject branches short and legible.
@@ -197,7 +197,7 @@ Never use humanoid robots, glowing brains, generic AI orbs, gears, factory worke
 4. **What comes off it:** finished product examples owned by agents and creators.
 5. **Why not search alone:** pile versus operated incremental supply.
 6. **Choose the operating model:** hosted API/MCP or open-source self-hosting with user-owned provider accounts.
-7. **Proof and boundary:** provenance, health, provider choice, and the judgment Feedline deliberately leaves to the agent.
+7. **Proof and boundary:** provenance, health, provider choice, and the judgment SourceFoundry deliberately leaves to the agent.
 8. **Action:** build one feed and inspect its output.
 
 ## Drift prevention
@@ -207,9 +207,9 @@ An implementation is off-brand if it:
 - could become another developer-tool landing page by changing only the logo and colors;
 - uses three equal feature cards where the line sequence would explain the mechanism;
 - hides failure, rejection, provenance, or empty-state distinctions;
-- makes Feedline look like the author, analyst, or editor;
+- makes SourceFoundry look like the author, analyst, or editor;
 - uses monospace for ordinary prose;
 - substitutes retro beige, neo-brutalism, or industrial decoration for product character;
 - makes the interface feel static when the product promise is continuous supply.
 
-Before release, compare the page against [the brand board](docs/brand/feedline-brand-board.svg) and verify that the signature line, personality, hero, villain, and product boundary all remain visible.
+Before release, compare the page against [the brand board](docs/brand/sourcefoundry-brand-board.svg) and verify that the signature line, personality, hero, villain, and product boundary all remain visible.

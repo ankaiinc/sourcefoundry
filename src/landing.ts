@@ -2,20 +2,19 @@ const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (charact
 
 export function landingPage(baseUrl: string): string {
   const origin = escapeHtml(baseUrl);
-  const socialImage = `${origin}/feedline-og.png`;
+  const socialImage = `${origin}/sourcefoundry-og.png`;
   const structuredData = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'Feedline',
-    alternateName: 'SourceFoundry',
+    name: 'SourceFoundry',
     applicationCategory: 'DeveloperApplication',
     operatingSystem: 'Any',
-    description: 'Feedline continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents.',
+    description: 'SourceFoundry continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents.',
     url: baseUrl,
     codeRepository: 'https://github.com/ankaiinc/sourcefoundry',
     license: 'https://opensource.org/license/mit',
   }).replace(/</g, '\\u003c');
-  const agentPrompt = `Open ${baseUrl}/agent.md. Set up Feedline, store SOURCEFOUNDRY_API_TOKEN in your secret store, then build a recurring source feed from the sources I describe. Run it and return new source items with links, dates, original sources, completeness, and source health. Do not rank, summarize, or publish unless I ask.`;
+  const agentPrompt = `Open ${baseUrl}/agent.md. Set up SourceFoundry, store SOURCEFOUNDRY_API_TOKEN in your secret store, then build a recurring source feed from the sources I describe. Run it and return new source items with links, dates, original sources, completeness, and source health. Do not rank, summarize, or publish unless I ask.`;
   const escapedPrompt = escapeHtml(agentPrompt);
 
   return `<!doctype html>
@@ -23,31 +22,31 @@ export function landingPage(baseUrl: string): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Feedline continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents." />
+  <meta name="description" content="SourceFoundry continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents." />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="theme-color" content="#F6F8FB" />
   <link rel="canonical" href="${origin}/" />
   <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Feedline" />
-  <meta property="og:title" content="Feedline — source feeds that stay fresh" />
+  <meta property="og:site_name" content="SourceFoundry" />
+  <meta property="og:title" content="SourceFoundry — source feeds that stay fresh" />
   <meta property="og:description" content="Continuously collect, clean, and monitor sources for news feeds, trackers, briefs, and research agents." />
   <meta property="og:url" content="${origin}/" />
   <meta property="og:image" content="${socialImage}" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Feedline conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
+  <meta property="og:image:alt" content="SourceFoundry conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Feedline — source feeds that stay fresh" />
+  <meta name="twitter:title" content="SourceFoundry — source feeds that stay fresh" />
   <meta name="twitter:description" content="Continuously collect, clean, and monitor sources for news feeds, trackers, briefs, and research agents." />
   <meta name="twitter:image" content="${socialImage}" />
-  <meta name="twitter:image:alt" content="Feedline conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
+  <meta name="twitter:image:alt" content="SourceFoundry conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
   <link rel="icon" href="${origin}/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400..700&amp;family=Spline+Sans+Mono:wght@400..700&amp;display=swap" rel="stylesheet" />
-  <link rel="alternate" type="text/markdown" href="${origin}/agent.md" title="Feedline agent guide" />
-  <link rel="alternate" type="text/plain" href="${origin}/llms.txt" title="Feedline LLM instructions" />
-  <title>Feedline — source supply for agents</title>
+  <link rel="alternate" type="text/markdown" href="${origin}/agent.md" title="SourceFoundry agent guide" />
+  <link rel="alternate" type="text/plain" href="${origin}/llms.txt" title="SourceFoundry LLM instructions" />
+  <title>SourceFoundry — source supply for agents</title>
   <script type="application/ld+json">${structuredData}</script>
   <style>
     :root {
@@ -290,9 +289,9 @@ export function landingPage(baseUrl: string): string {
 <body>
   <nav class="site-nav" aria-label="Primary navigation">
     <div class="shell nav-inner">
-      <a class="brand" href="/" aria-label="Feedline home">
+      <a class="brand" href="/" aria-label="SourceFoundry home">
         <svg class="brand-mark" viewBox="0 0 56 32" aria-hidden="true"><path d="M1 16h41" fill="none" stroke="#1457ff" stroke-width="2.5" stroke-linecap="round"/><rect x="19" y="2" width="15" height="28" rx="3" fill="#f6f8fb" stroke="#0b1220" stroke-width="2.5"/><path d="M34 16l13 13h8" fill="none" stroke="#c9362b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="16" r="4" fill="#1457ff"/><rect x="38" y="12" width="8" height="8" rx="2" fill="#1457ff"/></svg>
-        <span class="brand-name">Feedline</span>
+        <span class="brand-name">SourceFoundry</span>
         <span class="brand-status">Source supply for agents</span>
       </a>
       <div class="nav-links">
@@ -312,20 +311,20 @@ export function landingPage(baseUrl: string): string {
             <h1>Give your agent a source feed that stays fresh.</h1>
           </div>
           <div class="hero-side">
-            <p>Feedline continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Your agent uses those results to build news feeds, trackers, briefs, and research.</p>
+            <p>SourceFoundry continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Your agent uses those results to build news feeds, trackers, briefs, and research.</p>
             <div class="hero-actions">
               <a class="button" href="#agent">Connect your coding agent <span aria-hidden="true">→</span></a>
               <a class="button secondary" href="#outputs">See examples</a>
             </div>
-            <div class="hero-note"><span class="pulse" aria-hidden="true"></span>No dashboard. Your coding agent operates Feedline.</div>
+            <div class="hero-note"><span class="pulse" aria-hidden="true"></span>No dashboard. Your coding agent operates SourceFoundry.</div>
           </div>
         </div>
 
-        <div class="line-window" id="line" tabindex="0" aria-label="Animated diagram showing sources entering Feedline, duplicates being removed, and new results reaching an agent product">
+        <div class="line-window" id="line" tabindex="0" aria-label="Animated diagram showing sources entering SourceFoundry, duplicates being removed, and new results reaching an agent product">
           <div class="line-scene">
             <p class="scene-label">Sources in · new results out</p>
             <svg viewBox="0 0 1200 328" role="img" aria-labelledby="lineTitle lineDesc">
-              <title id="lineTitle">Feedline source sorting process</title>
+              <title id="lineTitle">SourceFoundry source sorting process</title>
               <desc id="lineDesc">RSS, official sources, and search results merge into a line, duplicate results leave on a reject branch, and new results continue to an agent product.</desc>
               <g font-family="Spline Sans, sans-serif" fill="#0b1220">
                 <text x="36" y="94" font-size="13" font-weight="600">VARIED SOURCES</text>
@@ -366,7 +365,7 @@ export function landingPage(baseUrl: string): string {
     <section class="truth-strip" aria-label="Product responsibility boundary">
       <div class="shell truth-inner">
         <div class="truth"><span>You tell your agent</span><strong>What to track, which sources to use, and how often to check.</strong></div>
-        <div class="truth"><span>Feedline handles</span><strong>Fetching, retries, duplicate removal, original links, and failure monitoring.</strong></div>
+        <div class="truth"><span>SourceFoundry handles</span><strong>Fetching, retries, duplicate removal, original links, and failure monitoring.</strong></div>
         <div class="truth"><span>Your agent handles</span><strong>Choosing what matters, writing, ranking, and publishing.</strong></div>
       </div>
     </section>
@@ -375,7 +374,7 @@ export function landingPage(baseUrl: string): string {
       <div class="shell">
         <div class="reveal"><h2 class="section-title">One source operation. Many products your agent can make.</h2></div>
         <div class="output-layout reveal">
-          <div class="output-tabs" aria-label="Feedline product examples">
+          <div class="output-tabs" aria-label="SourceFoundry product examples">
             <button class="output-tab active" type="button" aria-pressed="true" data-output="news"><span>Vertical news feed</span><span>01</span></button>
             <button class="output-tab" type="button" aria-pressed="false" data-output="market"><span>Market tracker</span><span>02</span></button>
             <button class="output-tab" type="button" aria-pressed="false" data-output="brief"><span>Creator briefing</span><span>03</span></button>
@@ -388,7 +387,7 @@ export function landingPage(baseUrl: string): string {
             <div class="output-rail" aria-hidden="true"></div>
             <div class="output-details">
               <div class="output-detail"><span>Sources checked</span><strong id="output-input">Publisher feeds, official sources, and specific search queries</strong></div>
-              <div class="output-detail"><span>Feedline supplies</span><strong id="output-supply">New stories with their original links and source details</strong></div>
+              <div class="output-detail"><span>SourceFoundry supplies</span><strong id="output-supply">New stories with their original links and source details</strong></div>
               <div class="output-detail"><span>Your agent adds</span><strong id="output-agent">Editorial selection, ranking, summaries, and presentation</strong></div>
               <div class="output-detail"><span>Maintenance removed</span><strong id="output-burden">Polling, duplicate announcements, stale feeds, and hidden failures</strong></div>
             </div>
@@ -400,7 +399,7 @@ export function landingPage(baseUrl: string): string {
 
     <section class="comparison">
       <div class="shell">
-        <div class="reveal"><h2 class="section-title">Search gives your agent a pile. Feedline gives it a supply line.</h2></div>
+        <div class="reveal"><h2 class="section-title">Search gives your agent a pile. SourceFoundry gives it a supply line.</h2></div>
         <div class="compare-visual reveal">
           <article class="compare-side">
             <h3>Search now</h3><p>Excellent for one question in this moment.</p>
@@ -419,22 +418,22 @@ export function landingPage(baseUrl: string): string {
 
     <section class="mechanism" aria-labelledby="mechanism-title">
       <div class="shell">
-        <div class="reveal"><h2 class="section-title" id="mechanism-title">Feedline checks your sources and gives your agent only what is new.</h2><p class="section-copy">It runs on a schedule, removes duplicate results, keeps the original links, and shows you when a source fails.</p></div>
+        <div class="reveal"><h2 class="section-title" id="mechanism-title">SourceFoundry checks your sources and gives your agent only what is new.</h2><p class="section-copy">It runs on a schedule, removes duplicate results, keeps the original links, and shows you when a source fails.</p></div>
         <div class="stages reveal">
           <div class="stage"><span class="stage-index">01</span><h3>Your agent sets it up</h3><p>Tell it what to track, which feeds or search queries to use, and how often to check.</p></div>
-          <div class="stage"><span class="stage-index">02</span><h3>Feedline checks sources</h3><p>It reads RSS feeds and calls the search provider you choose.</p></div>
-          <div class="stage"><span class="stage-index">03</span><h3>Feedline cleans results</h3><p>It uses one format, removes duplicate links, and keeps each original source.</p></div>
+          <div class="stage"><span class="stage-index">02</span><h3>SourceFoundry checks sources</h3><p>It reads RSS feeds and calls the search provider you choose.</p></div>
+          <div class="stage"><span class="stage-index">03</span><h3>SourceFoundry cleans results</h3><p>It uses one format, removes duplicate links, and keeps each original source.</p></div>
           <div class="stage"><span class="stage-index">04</span><h3>Your agent gets updates</h3><p>It reads only the new results and sees which sources failed or went stale.</p></div>
         </div>
-        <div class="boundary reveal"><strong>Feedline does not decide what is true or important.</strong><span>Your agent decides what to use, write, rank, or publish.</span></div>
+        <div class="boundary reveal"><strong>SourceFoundry does not decide what is true or important.</strong><span>Your agent decides what to use, write, rank, or publish.</span></div>
       </div>
     </section>
 
     <section class="agent-handoff" id="agent">
       <div class="shell agent-grid">
         <div class="reveal">
-          <h2>Connect Feedline to your coding agent.</h2>
-          <p class="lead">There is no Feedline dashboard. Your agent reads the setup guide, creates the feed, runs it, and retrieves new source items through MCP or REST.</p>
+          <h2>Connect SourceFoundry to your coding agent.</h2>
+          <p class="lead">There is no SourceFoundry dashboard. Your agent reads the setup guide, creates the feed, runs it, and retrieves new source items through MCP or REST.</p>
           <div class="agent-actions"><button class="button light" type="button" data-copy="${escapedPrompt}">Copy the agent prompt</button><a class="button" href="${origin}/agent.md">Open agent.md</a></div>
           <p class="agent-proof">MCP: build_source_feed · read_source_feed</p>
         </div>
@@ -442,7 +441,7 @@ export function landingPage(baseUrl: string): string {
           <div class="panel-top"><span>Prompt for your coding agent</span><span class="panel-status">Ready</span></div>
           <pre class="prompt-text">Open ${origin}/agent.md.
 
-Set up Feedline and store SOURCEFOUNDRY_API_TOKEN in your secret store.
+Set up SourceFoundry and store SOURCEFOUNDRY_API_TOKEN in your secret store.
 
 Build a recurring source feed from the sources I describe. Run it and return new source items with links, dates, original sources, completeness, and source health.
 
@@ -454,9 +453,9 @@ Do not rank, summarize, or publish unless I ask.</pre>
 
     <section class="operating">
       <div class="shell">
-        <div class="reveal"><h2 class="section-title">Use our hosted service, or run Feedline yourself.</h2><p class="section-copy">In either case, your coding agent connects through MCP or REST. There is no dashboard.</p></div>
+        <div class="reveal"><h2 class="section-title">Use our hosted service, or run SourceFoundry yourself.</h2><p class="section-copy">In either case, your coding agent connects through MCP or REST. There is no dashboard.</p></div>
         <div class="operating-list reveal">
-          <article class="operating-row"><span class="operating-index">01 · HOSTED</span><h3>We run Feedline for you</h3><p>Your agent connects to our service. We run the API, database, schedules, and source monitoring.</p><code>GET ${origin}/agent.md</code></article>
+          <article class="operating-row"><span class="operating-index">01 · HOSTED</span><h3>We run SourceFoundry for you</h3><p>Your agent connects to our service. We run the API, database, schedules, and source monitoring.</p><code>GET ${origin}/agent.md</code></article>
           <article class="operating-row"><span class="operating-index">02 · SELF-HOST</span><h3>Run it on your infrastructure</h3><p>Deploy the open-source service. For search, use your own Tavily, Exa, or Serper account.</p><code>docker compose up --build</code></article>
           <article class="operating-row"><span class="operating-index">03 · AGENT ACCESS</span><h3>Connect through MCP or REST</h3><p>Hosted and self-hosted installations support the same workflow for your coding agent.</p><code>build_source_feed · read_source_feed</code></article>
         </div>
@@ -466,7 +465,7 @@ Do not rank, summarize, or publish unless I ask.</pre>
     <section class="final-line">
       <div class="final-content reveal">
         <h2>Keep your product supplied.</h2>
-        <p>Tell your coding agent what to track. Feedline will keep checking the sources.</p>
+        <p>Tell your coding agent what to track. SourceFoundry will keep checking the sources.</p>
         <div class="hero-actions" style="justify-content:center"><button class="button" type="button" data-copy="${escapedPrompt}">Copy prompt for your agent</button><a class="button secondary" href="https://github.com/ankaiinc/sourcefoundry">View the open-source repo</a></div>
       </div>
     </section>
@@ -474,7 +473,7 @@ Do not rank, summarize, or publish unless I ask.</pre>
 
   <footer>
     <div class="shell footer-inner">
-      <div class="footer-note"><strong style="color:var(--ink)">Feedline</strong> is the public name for the open-source SourceFoundry service. Feedline collects and maintains source feeds; your agent decides what to publish.</div>
+      <div class="footer-note"><strong style="color:var(--ink)">SourceFoundry</strong> collects and maintains source feeds; your agent decides what to publish.</div>
       <div class="footer-links"><a href="${origin}/agent.md">Agent guide</a><a href="${origin}/openapi.json">OpenAPI</a><a href="${origin}/.well-known/sourcefoundry.json">Service descriptor</a><a href="https://github.com/ankaiinc/sourcefoundry">GitHub</a><a href="https://4agents.fyi">4agents.fyi</a></div>
     </div>
   </footer>

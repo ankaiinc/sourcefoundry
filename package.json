@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Feedline keeps coding agents supplied with fresh, deduplicated, monitored source feeds.",
+  "description": "SourceFoundry keeps coding agents supplied with fresh, deduplicated, monitored source feeds.",
   "license": "MIT",
   "homepage": "https://feedline.4agents.fyi",
   "repository": {

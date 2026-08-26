@@ -1,18 +1,16 @@
-# Feedline
+# SourceFoundry
 
 Give your coding agent a source feed that stays fresh.
 
-Feedline continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Coding agents use those results to build news feeds, market trackers, daily briefs, policy monitors, and research streams.
+SourceFoundry continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Coding agents use those results to build news feeds, market trackers, daily briefs, policy monitors, and research streams.
 
 [Hosted service](https://feedline.4agents.fyi) · [Agent guide](https://feedline.4agents.fyi/agent.md) · [OpenAPI](https://feedline.4agents.fyi/openapi.json) · [Self-hosting](docs/self-hosting.md) · [Operations](docs/operations.md) · [MCP](mcp/README.md)
 
-Feedline is the public product name. The repository, API token, environment variables, and compatibility headers retain the SourceFoundry technical name.
-
 ## Why this exists
 
-Feedline was created because every news feed and tracking product was rebuilding the same fragile source operation: checking feeds, calling search providers, scheduling runs, retrying failures, removing duplicates, preserving links, and noticing stale sources. That work does not make the product better. It only keeps its inputs available.
+SourceFoundry was created because every news feed and tracking product was rebuilding the same fragile source operation: checking feeds, calling search providers, scheduling runs, retrying failures, removing duplicates, preserving links, and noticing stale sources. That work does not make the product better. It only keeps its inputs available.
 
-Feedline is not an answer engine and it does not decide what is true or important. It keeps sources running; the consuming agent decides what to use, rank, write, or publish.
+SourceFoundry is not an answer engine and it does not decide what is true or important. It keeps sources running; the consuming agent decides what to use, rank, write, or publish.
 
 ## When to use it
 
@@ -22,11 +20,11 @@ Feedline is not an answer engine and it does not decide what is true or importan
 - Several products need the same collected evidence but apply different rankings or conclusions.
 - A team needs to know that a source failed, went stale, or returned incomplete data instead of silently treating an empty response as “nothing happened.”
 
-Do not use Feedline for a one-off question, for final editorial judgment, or as permission to collect or resell content you are not authorized to use.
+Do not use SourceFoundry for a one-off question, for final editorial judgment, or as permission to collect or resell content you are not authorized to use.
 
 ## What is different
 
-| Alternative | What it does well | What Feedline adds |
+| Alternative | What it does well | What SourceFoundry adds |
 |---|---|---|
 | Tavily, Exa, Serper | Search now | Recurring feeds, provider choice, durable runs, deduplication, provenance, health, and one stable output contract |
 | RSS reader | Follows known feeds | Search discovery, multi-tenant operation, API/MCP access, evidence normalization, retries, and source health |
@@ -52,7 +50,7 @@ Then open <http://localhost:8080>, read <http://localhost:8080/agent.md>, or che
 curl -fsS http://localhost:8080/ready
 ```
 
-Feed-only installations need no search-provider key. For search discovery, set `TAVILY_API_KEY`, `EXA_API_KEY`, or `SERPER_API_KEY` in the worker environment and select that provider on the discovery source. See [Self-hosting Feedline](docs/self-hosting.md) and [Provider keys and licensing](docs/provider-keys.md).
+Feed-only installations need no search-provider key. For search discovery, set `TAVILY_API_KEY`, `EXA_API_KEY`, or `SERPER_API_KEY` in the worker environment and select that provider on the discovery source. See [Self-hosting SourceFoundry](docs/self-hosting.md) and [Provider keys and licensing](docs/provider-keys.md).
 
 ## The high-level API
 
@@ -74,7 +72,7 @@ Example discovery source:
 }
 ```
 
-The provider key is never sent in this request. It stays in the Feedline worker's secret environment.
+The provider key is never sent in this request. It stays in the SourceFoundry worker's secret environment.
 
 ## MCP
 
@@ -84,9 +82,9 @@ The REST API is the stable product boundary; MCP is the agent-friendly adapter. 
 
 ## Provider and licensing boundary
 
-The Feedline code is MIT licensed. Tavily, Exa, Serper, publishers, and other upstream sources keep their own terms, quotas, and content rights. Open source does not transfer those rights or make a shared commercial provider key safe to redistribute.
+The SourceFoundry code is MIT licensed. Tavily, Exa, Serper, publishers, and other upstream sources keep their own terms, quotas, and content rights. Open source does not transfer those rights or make a shared commercial provider key safe to redistribute.
 
-For self-hosting, the operator supplies keys for accounts they are authorized to use and is responsible for the upstream terms. A hosted Feedline service should use provider lanes covered by its own commercial agreements or an encrypted customer-managed provider connection. Raw provider keys must never enter prompts, feed definitions, logs, or returned candidates.
+For self-hosting, the operator supplies keys for accounts they are authorized to use and is responsible for the upstream terms. A hosted SourceFoundry service should use provider lanes covered by its own commercial agreements or an encrypted customer-managed provider connection. Raw provider keys must never enter prompts, feed definitions, logs, or returned candidates.
 
 ## Architecture
 

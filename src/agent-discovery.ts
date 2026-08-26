@@ -35,7 +35,7 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     guardrails: [
       'Source upserts are idempotent by tenant and source URL.',
       'Active source-fetch jobs are deduplicated by tenant and source.',
-      'Provider API keys, cookies, and session tokens are managed by Feedline and must never be sent in an API request.',
+      'Provider API keys, cookies, and session tokens are managed by SourceFoundry and must never be sent in an API request.',
       'Autonomous credentials enqueue work but cannot run a job directly.',
       `Autonomous workspaces are limited to ${config.selfService.maxSources} sources, a ${config.selfService.minIntervalMinutes}-minute minimum interval, and ${config.selfService.maxItemsPerFetch} items per fetch.`,
     ],
@@ -46,17 +46,17 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
   return {
     openapi: '3.1.0',
     info: {
-      title: 'Feedline API',
+      title: 'SourceFoundry API',
       version: `1 (${config.releaseSha})`,
       description: 'Recurring source feeds, fresh source items, and source-health reporting for agents.',
     },
-    servers: [{ url: config.publicBaseUrl, description: 'Canonical Feedline service' }],
+    servers: [{ url: config.publicBaseUrl, description: 'Canonical SourceFoundry service' }],
     security: [{ bearerAuth: [] }],
     paths: {
       '/health': { get: operation('Process liveness', 'Returns public service identity and release.', { security: [] }) },
       '/ready': { get: operation('Service readiness', 'Returns readiness after a database connectivity check.', { security: [] }) },
       '/v1/meta': { get: operation('Discover agent capabilities', 'Returns the supported agent workflow and authentication boundary.', { security: [] }) },
-      '/llms.txt': { get: operation('Read the agent guide', 'A machine-discoverable alias for the Feedline agent guide.', { security: [] }) },
+      '/llms.txt': { get: operation('Read the agent guide', 'A machine-discoverable alias for the SourceFoundry agent guide.', { security: [] }) },
       '/v1/agent-enrollments': {
         post: operation('Create an autonomous workspace', 'Creates a tenant-scoped credential and returns its secret exactly once. No authentication is required.', {
           security: [],
@@ -198,7 +198,7 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
     components: {
       securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'API token' } },
       responses: {
-        Unauthorized: { description: 'A valid Feedline API token is required.' },
+        Unauthorized: { description: 'A valid SourceFoundry API token is required.' },
         Error: { description: 'Versioned error response with code and retryable flag.' },
       },
     },
@@ -206,9 +206,9 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
 }
 
 export function agentGuide(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'selfService'>): string {
-  return `# Feedline agent guide
+  return `# SourceFoundry agent guide
 
-Feedline turns RSS, Atom, and approved search-provider results into source feeds that stay fresh. Feedline handles collection, duplicate removal, original links, and source health; the consuming product owns interpretation, ranking, writing, and publication.
+SourceFoundry turns RSS, Atom, and approved search-provider results into source feeds that stay fresh. SourceFoundry handles collection, duplicate removal, original links, and source health; the consuming product owns interpretation, ranking, writing, and publication.
 
 ## Connect
 

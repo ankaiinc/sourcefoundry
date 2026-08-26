@@ -1,6 +1,6 @@
-# Self-hosting Feedline
+# Self-hosting SourceFoundry
 
-Self-hosting gives an individual, team, or agent its own Feedline service, database, source policy, and provider accounts. The result is the same REST and MCP contract as the hosted service without depending on Feedline's hosted provider keys.
+Self-hosting gives an individual, team, or agent its own SourceFoundry service, database, source policy, and provider accounts. The result is the same REST and MCP contract as the hosted service without depending on SourceFoundry's hosted provider keys.
 
 ## Fast path with Docker Compose
 

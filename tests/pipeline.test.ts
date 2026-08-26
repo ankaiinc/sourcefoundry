@@ -111,7 +111,7 @@ describe('signal pipeline', () => {
     </item><item>
       <title>AI product leadership strategy</title>
       <link>https://example.com/ai-product</link>
-      <description>High-scoring terms still do not give Feedline publication authority.</description>
+      <description>High-scoring terms still do not give SourceFoundry publication authority.</description>
       <pubDate>Sat, 13 Jun 2026 10:00:00 GMT</pubDate>
     </item></channel></rss>`;
 

@@ -1,6 +1,6 @@
-# Feedline MCP
+# SourceFoundry MCP
 
-Connect Feedline to MCP clients with two tools:
+Connect SourceFoundry to MCP clients with two tools:
 
 - `build_source_feed` creates or updates a recurring source feed and can enqueue its first run.
 - `read_source_feed` returns neutral candidates and optional operational health.
@@ -39,6 +39,6 @@ For a local self-hosted service, add:
 "SOURCEFOUNDRY_BASE": "http://localhost:8080"
 ```
 
-Discovery sources may select `tavily`, `exa`, or `serper`. Provider keys remain in the Feedline worker environment; they are never MCP arguments. Feed-only source feeds need no commercial search provider.
+Discovery sources may select `tavily`, `exa`, or `serper`. Provider keys remain in the SourceFoundry worker environment; they are never MCP arguments. Feed-only source feeds need no commercial search provider.
 
-Feedline supplies fresh source items with duplicate results removed and original links preserved. The consuming application or agent remains responsible for judgment, writing, ranking, and publication.
+SourceFoundry supplies fresh source items with duplicate results removed and original links preserved. The consuming application or agent remains responsible for judgment, writing, ranking, and publication.

@@ -12,14 +12,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'build_source_feed',
-      description: 'Create or update a recurring source feed. Feedline checks the sources; the consuming agent decides what to use or publish.',
+      description: 'Create or update a recurring source feed. SourceFoundry checks the sources; the consuming agent decides what to use or publish.',
       inputSchema: {
         type: 'object',
         properties: {
           tenant_id: { type: 'string', description: 'Required only when using an operator credential; autonomous credentials infer their workspace.' },
           idempotency_key: { type: 'string', description: 'Optional stable key. When omitted, the source-feed description determines the key.' },
           name: { type: 'string' },
-          purpose: { type: 'string', description: 'What the source feed should track, without asking Feedline to write the final answer.' },
+          purpose: { type: 'string', description: 'What the source feed should track, without asking SourceFoundry to write the final answer.' },
           sources: {
             type: 'array', minItems: 1, items: {
               type: 'object',
@@ -45,7 +45,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'read_source_feed',
-      description: 'Read new source items from a Feedline feed, optionally with source and run health.',
+      description: 'Read new source items from a SourceFoundry feed, optionally with source and run health.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -86,7 +86,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (!result) throw new Error(`Unknown tool: ${request.params.name}`);
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (error) {
-    return { content: [{ type: 'text', text: `Feedline error: ${error?.message || error}` }], isError: true };
+    return { content: [{ type: 'text', text: `SourceFoundry error: ${error?.message || error}` }], isError: true };
   }
 });
 
