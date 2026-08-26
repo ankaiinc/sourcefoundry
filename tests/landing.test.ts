@@ -21,6 +21,7 @@ describe('SourceFoundry landing page', () => {
     expect(page).toContain('https://github.com/ankaiinc/sourcefoundry');
     expect(page).toContain('<link rel="canonical" href="https://sourcefoundry.4agents.fyi/"');
     expect(page).toContain('<meta property="og:image" content="https://sourcefoundry.4agents.fyi/sourcefoundry-og.png"');
+    expect(page).not.toContain('href="https://4agents.fyi"');
     expect(page).toContain('<meta name="twitter:card" content="summary_large_image"');
     expect(page).toContain('application/ld+json');
     expect(page).not.toContain('id="enrollment"');
