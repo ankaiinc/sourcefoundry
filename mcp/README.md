@@ -7,9 +7,29 @@ Connect SourceFoundry to MCP clients with two tools:
 
 Configure `SOURCEFOUNDRY_API_TOKEN`. Set `SOURCEFOUNDRY_BASE` when using a self-hosted deployment.
 
-## Run from this repository
+## Install a released package
 
-The npm package has not been published yet. From a public clone:
+Use the immutable tarball attached to the GitHub release:
+
+```json
+{
+  "mcpServers": {
+    "sourcefoundry": {
+      "command": "npm",
+      "args": [
+        "exec",
+        "--yes",
+        "--package=https://github.com/ankaiinc/sourcefoundry/releases/download/v0.1.0/sourcefoundry-mcp-0.1.0.tgz",
+        "--",
+        "sourcefoundry-mcp"
+      ],
+      "env": { "SOURCEFOUNDRY_API_TOKEN": "${SOURCEFOUNDRY_API_TOKEN}" }
+    }
+  }
+}
+```
+
+Or run it from a checked-out release:
 
 ```bash
 npm ci --prefix mcp
@@ -19,7 +39,7 @@ SOURCEFOUNDRY_API_TOKEN='from-your-secret-store' \
 
 Set `SOURCEFOUNDRY_BASE=http://localhost:8080` to connect to a self-hosted service. Without it, the adapter connects to `https://sourcefoundry.4agents.fyi`.
 
-After the first npm package release:
+After npm publication:
 
 ```json
 {

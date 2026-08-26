@@ -6,6 +6,8 @@ SourceFoundry continuously checks RSS feeds and search providers, removes duplic
 
 [Hosted service](https://sourcefoundry.4agents.fyi) · [Agent guide](https://sourcefoundry.4agents.fyi/agent.md) · [OpenAPI](https://sourcefoundry.4agents.fyi/openapi.json) · [Self-hosting](docs/self-hosting.md) · [Operations](docs/operations.md) · [MCP](mcp/README.md)
 
+**Release status:** public beta. `v0.1.x` keeps the source-feed REST contract stable while self-hosting and provider integrations are hardened through real use.
+
 ## Why this exists
 
 SourceFoundry was created because every news feed and tracking product was rebuilding the same fragile source operation: checking feeds, calling search providers, scheduling runs, retrying failures, removing duplicates, preserving links, and noticing stale sources. That work does not make the product better. It only keeps its inputs available.
@@ -52,6 +54,8 @@ curl -fsS http://localhost:8080/ready
 
 Feed-only installations need no search-provider key. For search discovery, set `TAVILY_API_KEY`, `EXA_API_KEY`, or `SERPER_API_KEY` in the worker environment and select that provider on the discovery source. See [Self-hosting SourceFoundry](docs/self-hosting.md) and [Provider keys and licensing](docs/provider-keys.md).
 
+Versioned container images are published at `ghcr.io/ankaiinc/sourcefoundry`. Pin a release tag in production instead of using `latest`.
+
 ## The high-level API
 
 1. `POST /v1/agent-enrollments` creates a bounded tenant workspace and returns its secret once.
@@ -78,7 +82,7 @@ The provider key is never sent in this request. It stays in the SourceFoundry wo
 
 The MCP adapter exposes two high-level tools: `build_source_feed` and `read_source_feed`.
 
-The REST API is the stable product boundary; MCP is the agent-friendly adapter. Until the first npm release, run the adapter from this repository. See [mcp/README.md](mcp/README.md) for hosted and self-hosted configuration.
+The REST API is the stable product boundary; MCP is the agent-friendly adapter. Use the versioned MCP tarball attached to each [GitHub release](https://github.com/ankaiinc/sourcefoundry/releases), or run the adapter from a checked-out release. See [mcp/README.md](mcp/README.md) for hosted and self-hosted configuration.
 
 ## Provider and licensing boundary
 
@@ -107,4 +111,4 @@ npm test
 npm run build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the [MIT license](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SUPPORT.md](SUPPORT.md), [SECURITY.md](SECURITY.md), the [changelog](CHANGELOG.md), and the [MIT license](LICENSE).

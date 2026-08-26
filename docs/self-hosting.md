@@ -24,9 +24,13 @@ curl -fsS http://localhost:8080/.well-known/sourcefoundry.json
 
 Open <http://localhost:8080> for the human introduction or <http://localhost:8080/agent.md> for the agent operating guide.
 
+### Use a released container
+
+Each GitHub release publishes the same image to GitHub Container Registry. Replace the Compose `build` entry with `image: ghcr.io/ankaiinc/sourcefoundry:<version>` when you want a prebuilt, immutable release. Keep API and worker on the same version.
+
 ## Use MCP against the self-hosted service
 
-Until the npm package is published, run the adapter from the repository root:
+Run the adapter from a checked-out release:
 
 ```bash
 npm ci --prefix mcp
@@ -35,7 +39,30 @@ SOURCEFOUNDRY_API_TOKEN='from-your-secret-store' \
   node mcp/sourcefoundry-mcp.mjs
 ```
 
-After the first npm package release:
+Each GitHub release also includes `sourcefoundry-mcp-<version>.tgz`. Point `npm exec` at that immutable tarball until the npm package is published:
+
+```json
+{
+  "mcpServers": {
+    "sourcefoundry": {
+      "command": "npm",
+      "args": [
+        "exec",
+        "--yes",
+        "--package=https://github.com/ankaiinc/sourcefoundry/releases/download/v0.1.0/sourcefoundry-mcp-0.1.0.tgz",
+        "--",
+        "sourcefoundry-mcp"
+      ],
+      "env": {
+        "SOURCEFOUNDRY_BASE": "http://localhost:8080",
+        "SOURCEFOUNDRY_API_TOKEN": "${SOURCEFOUNDRY_API_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+When `@sourcefoundry/mcp` is published to npm, the shorter configuration will be:
 
 ```json
 {
