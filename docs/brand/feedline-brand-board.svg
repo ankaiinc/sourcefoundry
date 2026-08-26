@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Feedline working brand board</title>
+  <desc id="desc">A cool white brand board showing Feedline's wordmark, primary promise, optical sorting line metaphor, typography, colors, personality, and design guardrails.</desc>
+  <defs>
+    <style>
+      .sans { font-family: "Spline Sans", Inter, system-ui, -apple-system, sans-serif; fill: #0B1220; }
+      .mono { font-family: "Spline Sans Mono", "SFMono-Regular", Consolas, monospace; fill: #566276; letter-spacing: .04em; }
+      .hair { stroke: #D7DEE8; stroke-width: 2; fill: none; }
+      .rail { stroke: #1457FF; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .reject { stroke: #C9362B; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .small { font-size: 15px; }
+      .label { font-size: 13px; font-weight: 600; }
+    </style>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E9EDF3" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#F6F8FB"/>
+  <rect x="44" y="44" width="1512" height="912" rx="16" fill="#FFFFFF"/>
+
+  <!-- Header and working mark -->
+  <g transform="translate(92 88)">
+    <path class="rail" d="M0 30 H92"/>
+    <rect x="38" y="5" width="26" height="50" rx="4" fill="#FFFFFF" stroke="#0B1220" stroke-width="3"/>
+    <path class="reject" d="M64 30 L88 54 H112"/>
+    <circle cx="25" cy="30" r="7" fill="#1457FF"/>
+    <rect x="72" y="23" width="14" height="14" rx="3" fill="#1457FF"/>
+  </g>
+  <text x="230" y="133" class="sans" font-size="45" font-weight="680">Feedline</text>
+  <text x="230" y="162" class="mono label">WORKING BRAND · NAME NOT CLEARED</text>
+
+  <text x="92" y="252" class="sans" font-size="68" font-weight="680" letter-spacing="-2.4">Your agent makes the product.</text>
+  <text x="92" y="326" class="sans" font-size="68" font-weight="680" letter-spacing="-2.4">Feedline keeps it supplied.</text>
+  <text x="96" y="375" class="sans" font-size="22" fill="#566276">Continuous source supply for news feeds, trackers, briefs, monitors, and research.</text>
+
+  <!-- Signature line panel -->
+  <rect x="72" y="422" width="1456" height="278" rx="12" fill="#F6F8FB"/>
+  <rect x="72" y="422" width="1456" height="278" rx="12" fill="url(#grid)" opacity=".72"/>
+  <text x="104" y="463" class="mono label">THE SIGNATURE SEQUENCE</text>
+
+  <!-- Intake units -->
+  <rect x="112" y="520" width="112" height="42" rx="21" fill="#FFFFFF" stroke="#566276" stroke-width="2"/>
+  <text x="168" y="546" class="mono small" text-anchor="middle">RSS</text>
+  <rect x="104" y="587" width="152" height="42" rx="5" fill="#FFFFFF" stroke="#566276" stroke-width="2"/>
+  <text x="180" y="613" class="mono small" text-anchor="middle">OFFICIAL</text>
+  <path class="hair" d="M224 541 H304 L356 566"/>
+  <path class="hair" d="M256 608 H304 L356 566"/>
+  <rect x="118" y="650" width="126" height="28" rx="14" fill="#D7DEE8"/>
+  <text x="181" y="669" class="mono" font-size="11" text-anchor="middle">DISCOVERY</text>
+  <path class="hair" d="M244 664 H304 L356 566"/>
+  <text x="110" y="500" class="sans small" font-weight="600">VARIED SOURCES</text>
+
+  <!-- Main rail -->
+  <path class="rail" d="M356 566 H1354"/>
+  <circle cx="378" cy="566" r="10" fill="#1457FF"/>
+  <rect x="475" y="552" width="28" height="28" rx="5" fill="#1457FF"/>
+
+  <!-- Inspection gate -->
+  <g>
+    <rect x="590" y="493" width="100" height="146" rx="5" fill="#FFFFFF" stroke="#0B1220" stroke-width="3"/>
+    <rect x="609" y="514" width="62" height="104" rx="3" fill="#F6F8FB" stroke="#D7DEE8" stroke-width="2"/>
+    <line x1="624" y1="521" x2="624" y2="611" stroke="#C7F23A" stroke-width="5"/>
+    <text x="640" y="478" class="sans small" font-weight="600" text-anchor="middle">INSPECT</text>
+    <text x="640" y="662" class="mono" font-size="11" text-anchor="middle">NORMALIZE · IDENTIFY</text>
+  </g>
+
+  <!-- Diverter and rejection -->
+  <path class="reject" d="M744 566 L815 637 H934"/>
+  <rect x="808" y="623" width="29" height="29" rx="4" fill="#C9362B"/>
+  <text x="871" y="661" class="mono" font-size="11" text-anchor="middle" fill="#C9362B">DUPLICATE DIVERTED</text>
+  <text x="790" y="526" class="sans small" font-weight="600">VISIBLE REJECT LANE</text>
+
+  <!-- Output units -->
+  <g>
+    <rect x="982" y="540" width="116" height="52" rx="6" fill="#FFFFFF" stroke="#1457FF" stroke-width="2"/>
+    <rect x="995" y="551" width="52" height="7" rx="3.5" fill="#1457FF"/>
+    <rect x="995" y="565" width="88" height="5" rx="2.5" fill="#D7DEE8"/>
+    <text x="1040" y="611" class="mono" font-size="10" text-anchor="middle">SOURCE · 09:42</text>
+
+    <rect x="1126" y="540" width="116" height="52" rx="6" fill="#FFFFFF" stroke="#1457FF" stroke-width="2"/>
+    <rect x="1139" y="551" width="66" height="7" rx="3.5" fill="#1457FF"/>
+    <rect x="1139" y="565" width="88" height="5" rx="2.5" fill="#D7DEE8"/>
+    <text x="1184" y="611" class="mono" font-size="10" text-anchor="middle">SOURCE · 09:44</text>
+
+    <rect x="1270" y="540" width="116" height="52" rx="6" fill="#FFFFFF" stroke="#1457FF" stroke-width="2"/>
+    <rect x="1283" y="551" width="58" height="7" rx="3.5" fill="#1457FF"/>
+    <rect x="1283" y="565" width="88" height="5" rx="2.5" fill="#D7DEE8"/>
+    <text x="1328" y="611" class="mono" font-size="10" text-anchor="middle">SOURCE · 09:47</text>
+  </g>
+  <text x="1178" y="500" class="sans small" font-weight="600" text-anchor="middle">LABELED CANDIDATES</text>
+  <path class="rail" d="M1354 566 H1458"/>
+  <path d="M1458 566 l-16 -10 v20 z" fill="#1457FF"/>
+  <text x="1458" y="654" class="sans small" font-weight="600" text-anchor="end">TO YOUR PRODUCT →</text>
+
+  <!-- Bottom system -->
+  <g transform="translate(92 752)">
+    <text x="0" y="0" class="mono label">TYPE</text>
+    <text x="0" y="56" class="sans" font-size="34" font-weight="680">Spline Sans</text>
+    <text x="0" y="91" class="sans" font-size="18" fill="#566276">Clear, alert, engineered—not mechanical.</text>
+    <text x="0" y="130" class="mono" font-size="14">Spline Sans Mono · provenance only</text>
+  </g>
+
+  <g transform="translate(565 752)">
+    <text x="0" y="0" class="mono label">COLOR BEHAVIOR</text>
+    <rect x="0" y="28" width="86" height="68" rx="6" fill="#0B1220"/>
+    <rect x="98" y="28" width="86" height="68" rx="6" fill="#1457FF"/>
+    <rect x="196" y="28" width="86" height="68" rx="6" fill="#D7DEE8"/>
+    <rect x="294" y="28" width="86" height="68" rx="6" fill="#087A4D"/>
+    <rect x="392" y="28" width="86" height="68" rx="6" fill="#C9362B"/>
+    <rect x="490" y="28" width="86" height="68" rx="6" fill="#C7F23A"/>
+    <text x="43" y="118" class="mono" font-size="10" text-anchor="middle">INK</text>
+    <text x="141" y="118" class="mono" font-size="10" text-anchor="middle">RAIL</text>
+    <text x="239" y="118" class="mono" font-size="10" text-anchor="middle">STEEL</text>
+    <text x="337" y="118" class="mono" font-size="10" text-anchor="middle">PASS</text>
+    <text x="435" y="118" class="mono" font-size="10" text-anchor="middle">REJECT</text>
+    <text x="533" y="118" class="mono" font-size="10" text-anchor="middle">SENSOR</text>
+  </g>
+
+  <g transform="translate(1224 752)">
+    <text x="0" y="0" class="mono label">PERSONALITY</text>
+    <text x="0" y="47" class="sans" font-size="24" font-weight="650">The vigilant operator</text>
+    <text x="0" y="83" class="sans" font-size="17" fill="#566276">Alert · exact · candid · unshowy</text>
+    <text x="0" y="121" class="sans" font-size="16">“4 duplicates diverted.</text>
+    <text x="0" y="146" class="sans" font-size="16">All 6 sources healthy.”</text>
+  </g>
+
+  <line x1="92" y1="930" x2="1508" y2="930" stroke="#D7DEE8" stroke-width="2"/>
+  <text x="92" y="957" class="mono" font-size="11">NOT FACTORY COSPLAY · NO BEIGE · NO NEOBRUTALISM · NO ALL-MONO PROSE · NO CARD SOUP</text>
+  <text x="1508" y="957" class="mono" font-size="11" text-anchor="end">RAIL → GATE → DIVERTER → LABELED OUTPUT</text>
+</svg>
