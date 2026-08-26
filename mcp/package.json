@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "SourceFoundry MCP server — build durable source feeds and read fresh source items.",
   "license": "MIT",
-  "homepage": "https://feedline.4agents.fyi",
+  "homepage": "https://sourcefoundry.4agents.fyi",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ankaiinc/sourcefoundry.git",

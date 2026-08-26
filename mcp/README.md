@@ -17,7 +17,7 @@ SOURCEFOUNDRY_API_TOKEN='from-your-secret-store' \
   node mcp/sourcefoundry-mcp.mjs
 ```
 
-Set `SOURCEFOUNDRY_BASE=http://localhost:8080` to connect to a self-hosted service. Without it, the adapter connects to `https://feedline.4agents.fyi`.
+Set `SOURCEFOUNDRY_BASE=http://localhost:8080` to connect to a self-hosted service. Without it, the adapter connects to `https://sourcefoundry.4agents.fyi`.
 
 After the first npm package release:
 

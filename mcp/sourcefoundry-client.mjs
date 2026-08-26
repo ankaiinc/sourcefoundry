@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const DEFAULT_SOURCEFOUNDRY_BASE = 'https://feedline.4agents.fyi';
+export const DEFAULT_SOURCEFOUNDRY_BASE = 'https://sourcefoundry.4agents.fyi';
 
 export async function buildSourceFeed({
   sourceFeed,
