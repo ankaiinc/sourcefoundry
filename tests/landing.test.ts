@@ -2,19 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { landingPage } from '../src/landing.js';
 
 describe('SourceFoundry landing page', () => {
-  it('offers a direct autonomous enrollment path on the canonical domain', () => {
+  it('markets Feedline and hands operation to the coding agent', () => {
     const page = landingPage('https://sources.4agents.fyi');
-    expect(page).toContain('/v1/agent-enrollments');
     expect(page).toContain('https://sources.4agents.fyi/llms.txt');
     expect(page).toContain('SOURCEFOUNDRY_API_TOKEN');
-    expect(page).toContain('Describe the supply.<br>Keep it flowing.');
-    expect(page).toContain('/v1/source-feeds');
-    expect(page).toContain('Your product owns');
-    expect(page).toContain('The repeatable source jobs agents should not rebuild.');
-    expect(page).toContain('Other tools fetch. SourceFoundry operates a reusable supply.');
-    expect(page).toContain('Run it with your keys');
+    expect(page).toContain('Your agent makes the product.');
+    expect(page).toContain('Feedline keeps it supplied');
+    expect(page).toContain('No dashboard. Your coding agent operates the service.');
+    expect(page).toContain('The Feedline Trap');
+    expect(page).toContain('build_source_feed · read_source_feed');
+    expect(page).toContain('Search gives your agent a pile. Feedline gives it a supply line.');
+    expect(page).toContain('Hand the line to your coding agent.');
     expect(page).toContain('docker compose up --build');
-    expect(page).toContain('Tavily / Exa / Serper');
-    expect(page).toContain('Product of <a href="https://4agents.fyi">4agents.fyi</a>');
+    expect(page).toContain('Tavily, Exa, or Serper');
+    expect(page).toContain('https://github.com/ankaiinc/sourcefoundry');
+    expect(page).not.toContain('id="enrollment"');
   });
 });
