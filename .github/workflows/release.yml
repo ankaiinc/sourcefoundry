@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing release tag to publish
+        required: true
+        type: string
+
+env:
+  RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
 permissions:
   contents: write
@@ -16,6 +25,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify release tag matches this commit
+        shell: bash
+        run: |
+          case "$RELEASE_VERSION" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Invalid release version: $RELEASE_VERSION" >&2; exit 1 ;;
+          esac
+          test "$(git rev-parse "${RELEASE_VERSION}^{commit}")" = "$GITHUB_SHA"
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -55,12 +75,13 @@ jobs:
           build-args: |
             SOURCEFOUNDRY_RELEASE_SHA=${{ github.sha }}
           tags: |
-            ghcr.io/ankaiinc/sourcefoundry:${{ github.ref_name }}
+            ghcr.io/ankaiinc/sourcefoundry:${{ env.RELEASE_VERSION }}
             ghcr.io/ankaiinc/sourcefoundry:latest
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
         with:
           generate_release_notes: true
-          body_path: .github/release-notes/${{ github.ref_name }}.md
+          tag_name: ${{ env.RELEASE_VERSION }}
+          body_path: .github/release-notes/${{ env.RELEASE_VERSION }}.md
           files: release/*.tgz
