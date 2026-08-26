@@ -19,5 +19,6 @@ RUN npm ci --omit=dev
 COPY --chown=node:node --from=build /app/dist ./dist
 COPY --chown=node:node migrations ./migrations
 COPY --chown=node:node public ./public
+COPY --chown=node:node certs ./certs
 USER node
 CMD ["node", "dist/src/server.js"]
