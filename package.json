@@ -3,7 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Standalone multi-tenant source ingestion service",
+  "description": "Dependable, recurring source supply for agents and applications.",
+  "license": "MIT",
+  "homepage": "https://sources.4agents.fyi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ankaiinc/sourcefoundry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ankaiinc/sourcefoundry/issues"
+  },
   "main": "./dist/src/client.js",
   "types": "./dist/src/client.d.ts",
   "exports": {
@@ -22,6 +31,7 @@
     "bootstrap:attention": "node scripts/bootstrap-attention-sources.mjs",
     "bootstrap:pl": "node dist/src/bootstrap-pl-sources.js",
     "backup:readiness": "node dist/src/backup-readiness.js",
+    "migrate": "node dist/src/migrate.js",
     "reconcile:jobs": "node dist/src/reconcile-jobs.js",
     "test": "vitest run",
     "api": "node dist/src/server.js",
@@ -34,7 +44,7 @@
     "@types/pg": "^8.15.6",
     "@types/node": "^20.19.0",
     "typescript": "^5.9.3",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.7"
   },
   "engines": {
     "node": ">=20"

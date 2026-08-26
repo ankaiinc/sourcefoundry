@@ -10,8 +10,11 @@ describe('SourceFoundry landing page', () => {
     expect(page).toContain('Describe the supply.<br>Keep it flowing.');
     expect(page).toContain('/v1/source-feeds');
     expect(page).toContain('Your product owns');
-    expect(page).toContain('Evidence capacity');
-    expect(page).toContain('Approved source lanes');
+    expect(page).toContain('The repeatable source jobs agents should not rebuild.');
+    expect(page).toContain('Other tools fetch. SourceFoundry operates a reusable supply.');
+    expect(page).toContain('Run it with your keys');
+    expect(page).toContain('docker compose up --build');
+    expect(page).toContain('Tavily / Exa / Serper');
     expect(page).toContain('Product of <a href="https://4agents.fyi">4agents.fyi</a>');
   });
 });

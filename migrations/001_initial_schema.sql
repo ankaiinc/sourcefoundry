@@ -207,7 +207,13 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.claim_next_sourcefoundry_job(integer, text[]) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.claim_next_sourcefoundry_job(integer, text[]) TO service_role;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.claim_next_sourcefoundry_job(integer, text[]) TO service_role';
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.reap_zombie_sourcefoundry_jobs(p_stale_minutes integer DEFAULT 30)
 RETURNS integer
@@ -235,7 +241,13 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.reap_zombie_sourcefoundry_jobs(integer) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.reap_zombie_sourcefoundry_jobs(integer) TO service_role;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.reap_zombie_sourcefoundry_jobs(integer) TO service_role';
+  END IF;
+END;
+$$;
 
 ALTER TABLE public.sourcefoundry_tenants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sourcefoundry_sources ENABLE ROW LEVEL SECURITY;

@@ -7,6 +7,7 @@ export type SourceFeedSourceRequest = {
   kind: SourceFeedSourceKind;
   url?: string;
   label: string;
+  provider?: 'tavily' | 'exa' | 'serper';
   required?: boolean;
   queries?: string[];
   includeDomains?: string[];
@@ -164,6 +165,7 @@ function normalizeSource(
   }
   if (requested.kind === 'feed') {
     if (!requested.url) throw new Error('feed source url is required');
+    if (requested.provider) throw new Error('feed sources do not accept a discovery provider');
     validatePublicHttpsUrl(requested.url);
     const source = {
       name: requested.label,
@@ -177,15 +179,17 @@ function normalizeSource(
     return { source, config: { url: requested.url, label: requested.label } };
   }
 
+  if (requested.url) throw new Error('discovery sources use the approved endpoint for their selected provider; do not provide url');
   const queries = boundedStrings(requested.queries, 'discovery queries', 10);
   if (queries.length === 0) throw new Error('discovery source queries must contain at least one query');
   const includeDomains = boundedDomains(requested.includeDomains);
   const excludeDomains = boundedDomains(requested.excludeDomains);
+  const provider = requested.provider ?? 'tavily';
+  const providerConfig = discoveryProviderConfig(provider);
   const metadata: JsonRecord = {
     mode: 'discovery',
-    provider: 'tavily',
-    topic: 'news',
-    search_depth: 'advanced',
+    provider,
+    ...providerConfig.metadata,
     queries,
     include_domains: includeDomains,
     exclude_domains: excludeDomains,
@@ -195,7 +199,7 @@ function normalizeSource(
   const source = {
     name: requested.label,
     sourceType: 'web' as const,
-    url: 'https://api.tavily.com/search',
+    url: providerConfig.url,
     intervalMinutes: feed.everyMinutes,
     maxItemsPerFetch: perSourceItemBudget,
     metadata,
@@ -205,7 +209,17 @@ function normalizeSource(
     timeoutSeconds: 20, failureCount: 0, ...source,
   });
   if (policy.agentManaged) validateAgentSourcePolicy(source, policy);
-  return { source, config: { label: requested.label, queries, includeDomains, excludeDomains, selectedProvider: 'tavily' } };
+  return { source, config: { label: requested.label, queries, includeDomains, excludeDomains, selectedProvider: provider } };
+}
+
+function discoveryProviderConfig(provider: 'tavily' | 'exa' | 'serper'): { url: string; metadata: JsonRecord } {
+  if (provider === 'exa') {
+    return { url: 'https://api.exa.ai/search', metadata: { search_type: 'fast', category: 'news' } };
+  }
+  if (provider === 'serper') {
+    return { url: 'https://google.serper.dev/news', metadata: {} };
+  }
+  return { url: 'https://api.tavily.com/search', metadata: { topic: 'news', search_depth: 'advanced' } };
 }
 
 function sameMembers(left: string[], right: string[]): boolean {

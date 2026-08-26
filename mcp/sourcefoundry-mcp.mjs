@@ -27,6 +27,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 kind: { type: 'string', enum: ['feed', 'discovery'] },
                 label: { type: 'string' },
                 url: { type: 'string', description: 'Required for feed sources.' },
+                provider: { type: 'string', enum: ['tavily', 'exa', 'serper'], description: 'Optional provider for discovery: tavily, exa, or serper.' },
                 required: { type: 'boolean' },
                 queries: { type: 'array', items: { type: 'string' }, description: 'Required for discovery sources.' },
                 includeDomains: { type: 'array', items: { type: 'string' } },

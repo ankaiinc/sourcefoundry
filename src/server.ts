@@ -572,10 +572,14 @@ function sourceFeedSources(value: unknown): SourceFeedSourceRequest[] {
     if (body.required !== undefined && typeof body.required !== 'boolean') {
       throw new ApiError(400, 'bad_request', `sources[${index}].required must be a boolean`);
     }
+    if (body.provider !== undefined && body.provider !== 'tavily' && body.provider !== 'exa' && body.provider !== 'serper') {
+      throw new ApiError(400, 'bad_request', `sources[${index}].provider must be tavily, exa, or serper`);
+    }
     return {
       kind,
       label: boundedString(body.label, `sources[${index}].label`, 160),
       ...(typeof body.url === 'string' ? { url: body.url } : {}),
+      ...(body.provider === 'tavily' || body.provider === 'exa' || body.provider === 'serper' ? { provider: body.provider } : {}),
       ...(body.required === true ? { required: true } : {}),
       ...(body.queries !== undefined ? { queries: stringArray(body.queries, `sources[${index}].queries`) } : {}),
       ...(body.includeDomains !== undefined ? { includeDomains: stringArray(body.includeDomains, `sources[${index}].includeDomains`) } : {}),

@@ -55,6 +55,45 @@ describe('source feeds', () => {
     expect(repo.jobs.size).toBe(1);
   });
 
+  it.each([
+    ['exa' as const, 'https://api.exa.ai/search'],
+    ['serper' as const, 'https://google.serper.dev/news'],
+  ])('routes discovery through the selected %s provider', async (provider, expectedUrl) => {
+    const repo = new MemorySignalRepository();
+    const tenant = await repo.upsertTenant({ slug: 'research', name: 'Research' });
+    const built = await buildSourceFeed(repo, {
+      tenantId: tenant.id,
+      idempotencyKey: 'policy-exa',
+      name: 'Policy discovery',
+      purpose: 'Supply policy evidence.',
+      sources: [{ kind: 'discovery', label: `${provider} news`, provider, queries: ['India AI policy'] }],
+      everyMinutes: 720,
+      maxItemsPerRun: 10,
+      maxCandidatesPerRun: 10,
+    }, { agentManaged: true, minIntervalMinutes: 720, maxItemsPerFetch: 10, maxSources: 3 });
+
+    const [membership] = await repo.listSourceFeedSources(built.sourceFeed.id);
+    expect(membership?.source.url).toBe(expectedUrl);
+    expect(membership?.source.metadata).toMatchObject({ provider });
+    expect(membership?.config).toMatchObject({ selectedProvider: provider });
+  });
+
+  it('rejects caller-supplied discovery endpoints so provider keys stay on approved hosts', async () => {
+    const repo = new MemorySignalRepository();
+    const tenant = await repo.upsertTenant({ slug: 'research', name: 'Research' });
+    await expect(buildSourceFeed(repo, {
+      tenantId: tenant.id,
+      idempotencyKey: 'unsafe-endpoint',
+      name: 'Unsafe discovery',
+      purpose: 'Supply policy evidence.',
+      sources: [{ kind: 'discovery', label: 'Discovery', provider: 'exa', url: 'https://example.com/search', queries: ['policy'] }],
+      everyMinutes: 720,
+      maxItemsPerRun: 10,
+      maxCandidatesPerRun: 10,
+    }, { agentManaged: true, minIntervalMinutes: 720, maxItemsPerFetch: 10, maxSources: 3 }))
+      .rejects.toThrow('do not provide url');
+  });
+
   it('rejects unsupported page extraction instead of pretending an HTML page is a feed', async () => {
     const repo = new MemorySignalRepository();
     const tenant = await repo.upsertTenant({ slug: 'pl', name: 'Pragmatic Leaders' });

@@ -16,6 +16,7 @@ ENV NODE_ENV=production
 ENV SOURCEFOUNDRY_RELEASE_SHA=$SOURCEFOUNDRY_RELEASE_SHA
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY --from=build /app/dist ./dist
-COPY migrations ./migrations
+COPY --chown=node:node --from=build /app/dist ./dist
+COPY --chown=node:node migrations ./migrations
+USER node
 CMD ["node", "dist/src/server.js"]

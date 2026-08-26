@@ -101,6 +101,7 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
                   kind: { type: 'string', enum: ['feed', 'discovery'] },
                   label: { type: 'string' },
                   url: { type: 'string', format: 'uri', description: 'Required for feed sources.' },
+                  provider: { type: 'string', enum: ['tavily', 'exa', 'serper'], default: 'tavily', description: 'Search provider for a discovery source. Self-hosted operators supply the matching key through the worker environment.' },
                   required: { type: 'boolean' },
                   queries: { type: 'array', items: { type: 'string' }, description: 'Required for discovery sources.' },
                   includeDomains: { type: 'array', items: { type: 'string' } },
@@ -255,14 +256,15 @@ Save the returned \`source.id\`, then enqueue it with \`POST /v1/ingest/source\`
 }
 \`\`\`
 
-For hosted search lanes, use only a provider and endpoint explicitly allowed by
-the current source policy. Do not send a provider key. If no approved lane is
-available, return that limitation to the caller instead of silently selecting a
+For discovery, select \`tavily\`, \`exa\`, or \`serper\` on the discovery source.
+The service operator supplies the matching key through the worker secret
+environment. Do not send a provider key through this API. If no configured lane
+is available, return that limitation instead of silently selecting another
 provider or substituting an untrusted source.
 
 ## Safety rules
 
-- Treat provider credentials, cookies, and session tokens as hosted infrastructure. Never include them in a source request, source URL, or prompt.
+- Treat provider credentials, cookies, and session tokens as operator-managed infrastructure. Never include them in a source request, source URL, or prompt.
 - Configure only the tenant and sources the caller asked for.
 - Autonomous workspaces can configure at most ${config.selfService.maxSources} sources, with at least ${config.selfService.minIntervalMinutes} minutes between fetches and at most ${config.selfService.maxItemsPerFetch} items per fetch.
 - Enqueue work; autonomous credentials cannot call \`run-once\`, because direct execution can make an unbounded provider request.

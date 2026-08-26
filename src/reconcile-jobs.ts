@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { pathToFileURL } from 'node:url';
 import { loadConfig } from './config.js';
+import { postgresConnectionOptions } from './postgres.js';
 
 const { Pool } = pg;
 const CONFIRMATION = 'cancel-duplicate-active-jobs';
@@ -193,8 +194,7 @@ async function main(): Promise<void> {
   const expectedDuplicateGroups = integerArg(args, '--expect-duplicate-groups=');
   const config = loadConfig();
   const pool = new Pool({
-    connectionString: config.databaseUrl,
-    ssl: config.databaseUrl.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
+    ...postgresConnectionOptions(config.databaseUrl),
     max: 2,
   });
   try {

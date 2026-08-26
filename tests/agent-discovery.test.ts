@@ -54,6 +54,7 @@ describe('SourceFoundry agent discovery', () => {
     expect(guide).toContain('First useful source');
     expect(guide).toContain('Do not\ninvent a publisher URL');
     expect(guide).toContain('Never include them in a source request');
+    expect(guide).toContain('select `tavily`, `exa`, or `serper`');
     expect(guide).toContain('run-once');
   });
 });

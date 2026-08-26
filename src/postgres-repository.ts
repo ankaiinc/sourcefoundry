@@ -20,6 +20,7 @@ import type {
 import { objectValue, toAgentCredential, toJob, toSource, toSourceFeed, toTenant, type SignalRepository } from './repository.js';
 import { aggregatePublicSignals, signalKeyFor } from './signals.js';
 import { conversationFromPayload } from './conversation.js';
+import { postgresConnectionOptions } from './postgres.js';
 
 const { Pool } = pg;
 
@@ -35,8 +36,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
 
   constructor(databaseUrl: string) {
     this.pool = new Pool({
-      connectionString: databaseUrl,
-      ssl: databaseUrl.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
+      ...postgresConnectionOptions(databaseUrl),
       max: 10,
     });
   }
