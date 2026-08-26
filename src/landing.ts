@@ -474,7 +474,7 @@ Do not rank, summarize, or publish unless I ask.</pre>
   <footer>
     <div class="shell footer-inner">
       <div class="footer-note"><strong style="color:var(--ink)">SourceFoundry</strong> collects and maintains source feeds; your agent decides what to publish.</div>
-      <div class="footer-links"><a href="${origin}/agent.md">Agent guide</a><a href="${origin}/openapi.json">OpenAPI</a><a href="${origin}/.well-known/sourcefoundry.json">Service descriptor</a><a href="https://github.com/ankaiinc/sourcefoundry">GitHub</a><a href="https://4agents.fyi">4agents.fyi</a></div>
+      <div class="footer-links"><a href="${origin}/agent.md">Agent guide</a><a href="${origin}/openapi.json">OpenAPI</a><a href="${origin}/.well-known/sourcefoundry.json">Service descriptor</a><a href="https://github.com/ankaiinc/sourcefoundry">GitHub</a></div>
     </div>
   </footer>
 
