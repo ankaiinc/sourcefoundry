@@ -1,0 +1,27 @@
+name: Feature or provider proposal
+description: Propose a public contract, provider, or operator capability before implementation.
+title: "[Proposal]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User or operator problem
+      description: Explain the recurring job and why existing SourceFoundry behavior is insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Proposed SourceFoundry boundary
+      description: What should SourceFoundry own, and what should remain with the consuming agent?
+    validations:
+      required: true
+  - type: textarea
+    id: trust
+    attributes:
+      label: Trust, licensing, and cost impact
+      description: Include provider terms, credentials, quotas, migrations, and tenant implications.
+    validations:
+      required: true
