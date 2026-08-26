@@ -1,6 +1,6 @@
 # Database trust certificates
 
-`supabase-prod-ca-2021.crt` is Supabase's public root certificate for hosted PostgreSQL connections. Feedline's Fly deployment uses it to verify the database certificate for API, worker, and release-migration connections.
+`supabase-prod-ca-2021.crt` is Supabase's public root certificate for hosted PostgreSQL connections. SourceFoundry's Fly deployment uses it to verify the database certificate for API, worker, and release-migration connections.
 
 - Source: <https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt>
 - Subject: `Supabase Root 2021 CA`

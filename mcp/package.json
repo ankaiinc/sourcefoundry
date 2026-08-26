@@ -1,7 +1,7 @@
 {
   "name": "@sourcefoundry/mcp",
   "version": "0.1.0",
-  "description": "Feedline MCP server — build durable source feeds and read fresh source items.",
+  "description": "SourceFoundry MCP server — build durable source feeds and read fresh source items.",
   "license": "MIT",
   "homepage": "https://feedline.4agents.fyi",
   "repository": {

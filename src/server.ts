@@ -29,8 +29,8 @@ import type { SourceFoundryErrorCode, SourceFoundryErrorResponse } from './types
 
 const config = loadConfig(process.env, { requireApiToken: true });
 const repo = new PostgresSourceFoundryRepository(config.databaseUrl);
-const feedlineSocialCard = readFileSync(new URL('../../public/feedline-og.png', import.meta.url));
-const feedlineFavicon = readFileSync(new URL('../../public/favicon.svg', import.meta.url));
+const sourcefoundrySocialCard = readFileSync(new URL('../../public/sourcefoundry-og.png', import.meta.url));
+const sourcefoundryFavicon = readFileSync(new URL('../../public/favicon.svg', import.meta.url));
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -49,12 +49,12 @@ const server = http.createServer(async (req, res) => {
       return sendPublicText(res, 200, sitemapXml(config.publicBaseUrl), 'application/xml; charset=utf-8');
     }
 
-    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/feedline-og.png') {
-      return sendPublicAsset(res, 200, feedlineSocialCard, 'image/png', req.method === 'HEAD');
+    if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname === '/sourcefoundry-og.png' || url.pathname === '/feedline-og.png')) {
+      return sendPublicAsset(res, 200, sourcefoundrySocialCard, 'image/png', req.method === 'HEAD');
     }
 
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/favicon.svg') {
-      return sendPublicAsset(res, 200, feedlineFavicon, 'image/svg+xml; charset=utf-8', req.method === 'HEAD');
+      return sendPublicAsset(res, 200, sourcefoundryFavicon, 'image/svg+xml; charset=utf-8', req.method === 'HEAD');
     }
 
     if (req.method === 'GET' && url.pathname === SOURCEFOUNDRY_DISCOVERY_PATH) {
@@ -123,7 +123,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && !url.pathname.startsWith('/v1/')) {
-      return sendHtml(res, 404, '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Not found — Feedline</title></head><body><main><h1>Not found</h1><p><a href="/">Return to Feedline</a></p></main></body></html>');
+      return sendHtml(res, 404, '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Not found — SourceFoundry</title></head><body><main><h1>Not found</h1><p><a href="/">Return to SourceFoundry</a></p></main></body></html>');
     }
 
     const access = await authenticate(req);

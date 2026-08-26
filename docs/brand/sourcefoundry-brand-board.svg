@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
-  <title id="title">Feedline working brand board</title>
-  <desc id="desc">A cool white brand board showing Feedline's wordmark, primary promise, optical sorting line metaphor, typography, colors, personality, and design guardrails.</desc>
+  <title id="title">SourceFoundry brand board</title>
+  <desc id="desc">A cool white brand board showing SourceFoundry's wordmark, primary promise, optical sorting line metaphor, typography, colors, personality, and design guardrails.</desc>
   <defs>
     <style>
       .sans { font-family: "Spline Sans", Inter, system-ui, -apple-system, sans-serif; fill: #0B1220; }
@@ -27,11 +27,11 @@
     <circle cx="25" cy="30" r="7" fill="#1457FF"/>
     <rect x="72" y="23" width="14" height="14" rx="3" fill="#1457FF"/>
   </g>
-  <text x="230" y="133" class="sans" font-size="45" font-weight="680">Feedline</text>
+  <text x="230" y="133" class="sans" font-size="45" font-weight="680">SourceFoundry</text>
   <text x="230" y="162" class="mono label">WORKING BRAND · NAME NOT CLEARED</text>
 
   <text x="92" y="252" class="sans" font-size="68" font-weight="680" letter-spacing="-2.4">Your agent makes the product.</text>
-  <text x="92" y="326" class="sans" font-size="68" font-weight="680" letter-spacing="-2.4">Feedline keeps it supplied.</text>
+  <text x="92" y="326" class="sans" font-size="68" font-weight="680" letter-spacing="-2.4">SourceFoundry keeps it supplied.</text>
   <text x="96" y="375" class="sans" font-size="22" fill="#566276">Continuous source supply for news feeds, trackers, briefs, monitors, and research.</text>
 
   <!-- Signature line panel -->

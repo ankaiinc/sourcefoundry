@@ -16,8 +16,8 @@
     <circle cx="8" cy="16" r="4.5" fill="#1457FF"/>
     <rect x="39" y="12" width="9" height="9" rx="2" fill="#1457FF"/>
   </g>
-  <text x="128" y="58" fill="#0B1220" font-family="Avenir Next, Avenir, sans-serif" font-size="28" font-weight="700">Feedline</text>
-  <text x="1070" y="54" fill="#566276" font-family="Menlo, monospace" font-size="12" text-anchor="end">FEEDLINE.4AGENTS.FYI</text>
+  <text x="128" y="58" fill="#0B1220" font-family="Avenir Next, Avenir, sans-serif" font-size="28" font-weight="700">SourceFoundry</text>
+  <text x="1070" y="54" fill="#566276" font-family="Menlo, monospace" font-size="12" text-anchor="end">SOURCE SUPPLY FOR AGENTS</text>
 
   <text x="54" y="194" fill="#0B1220" font-family="Avenir Next, Avenir, sans-serif" font-size="72" font-weight="700" letter-spacing="-3">
     <tspan x="54" dy="0">Source feeds</tspan>

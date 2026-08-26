@@ -1,14 +1,14 @@
-# Feedline public source supply v0
+# SourceFoundry public source supply v0
 
 Status: proposed product and interface contract
 Date: 2026-08-25
 Supersedes: the on-demand evidence-request shape drafted earlier on 2026-08-25
 
-Feedline is the public product name. SourceFoundry remains the technical service name in code, environment variables, compatibility headers, and existing API identifiers.
+SourceFoundry is the public and technical product name. Existing environment variables, compatibility headers, and API identifiers remain unchanged.
 
 ## Founding purpose
 
-Feedline exists to solve a product supply problem:
+SourceFoundry exists to solve a product supply problem:
 
 > Continuously turn external sources into fresh, reliable, deduplicated
 > candidate inventory that different products can consume and interpret in
@@ -32,7 +32,7 @@ reason for the service to exist.
 
 > Give your agent a source feed that stays fresh.
 
-Feedline checks RSS feeds and approved search providers on a schedule, removes duplicate results, keeps the original links, and reports source failures. The consuming agent decides what to use, rank, write, or publish.
+SourceFoundry checks RSS feeds and approved search providers on a schedule, removes duplicate results, keeps the original links, and reports source failures. The consuming agent decides what to use, rank, write, or publish.
 
 Suggested agent prompt:
 
