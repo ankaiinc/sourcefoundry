@@ -92,6 +92,41 @@ describe('signal pipeline', () => {
     expect(repo.attempts).toHaveLength(2);
   });
 
+  it('supplies every new item from an exact source feed without applying product-specific relevance terms', async () => {
+    const repo = new MemorySignalRepository();
+    const tenant = await repo.upsertTenant({ slug: 'botany', name: 'Botany tracker' });
+    const source = await repo.createSource({
+      tenantId: tenant.id,
+      name: 'Botanical bulletin',
+      sourceType: 'rss',
+      url: 'https://example.com/botany.xml',
+      reliability: 0.7,
+      metadata: { sourceFeedPurpose: 'Track newly catalogued alpine plants.' },
+    });
+    const feed = `<?xml version="1.0"?><rss><channel><item>
+      <title>Quarterly botanical index</title>
+      <link>https://example.com/alpine-index</link>
+      <description>Newly catalogued saxifrages from a high-altitude survey.</description>
+      <pubDate>Sat, 13 Jun 2026 10:00:00 GMT</pubDate>
+    </item><item>
+      <title>AI product leadership strategy</title>
+      <link>https://example.com/ai-product</link>
+      <description>High-scoring terms still do not give Feedline publication authority.</description>
+      <pubDate>Sat, 13 Jun 2026 10:00:00 GMT</pubDate>
+    </item></channel></rss>`;
+
+    await repo.enqueueSourceFetch({ tenantId: tenant.id, sourceId: source.id });
+    await drainOnce(repo, { maxAttempts: 5, fetchFn: async () => new Response(feed) });
+
+    expect(repo.items.size).toBe(2);
+    expect(repo.candidates.size).toBe(2);
+    expect([...repo.candidates.values()].map((candidate) => candidate.status)).toEqual([
+      'ready_for_review',
+      'ready_for_review',
+    ]);
+    expect([...repo.candidates.values()].map((candidate) => candidate.title)).toContain('Quarterly botanical index');
+  });
+
   it('runs one exact source job without consuming an unrelated backlog job', async () => {
     const repo = new MemorySignalRepository();
     const tenant = await repo.upsertTenant({ slug: 'attention', name: 'Attention OS' });

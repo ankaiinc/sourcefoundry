@@ -251,14 +251,15 @@ async function fetchSource(
       });
 
       if (inserted) itemsInserted++;
-      if (scored.candidateScore >= 0.45) {
+      const belongsToSourceFeed = typeof source.metadata.sourceFeedPurpose === 'string';
+      if (belongsToSourceFeed || scored.candidateScore >= 0.45) {
         await repo.upsertCandidate({
           tenantId: source.tenantId,
           sourceItemId: item.id,
           title: entry.title,
           summary: entry.summary,
           url: entry.url,
-          status: scored.candidateScore >= 0.78 ? 'published' : 'ready_for_review',
+          status: belongsToSourceFeed ? 'ready_for_review' : scored.candidateScore >= 0.78 ? 'published' : 'ready_for_review',
           score: scored.candidateScore,
           tags: scored.tags,
           metadata: {
