@@ -10,18 +10,39 @@ jobs:
   verify:
     name: Contract, tests, and build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sourcefoundry
+          POSTGRES_USER: sourcefoundry
+          POSTGRES_PASSWORD: sourcefoundry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sourcefoundry -d sourcefoundry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix mcp
+
+      - name: Audit dependencies
+        run: |
+          npm audit --audit-level=high
+          npm audit --prefix mcp --audit-level=high
 
       - name: Type-check
         run: npm run type-check
@@ -31,3 +52,19 @@ jobs:
 
       - name: Build production output
         run: npm run build
+
+      - name: Apply portable migrations twice
+        env:
+          SOURCEFOUNDRY_DATABASE_URL: postgresql://sourcefoundry:sourcefoundry@127.0.0.1:5432/sourcefoundry?sslmode=disable
+        run: |
+          npm run migrate
+          npm run migrate
+
+      - name: Verify MCP and self-hosted packaging
+        env:
+          SOURCEFOUNDRY_API_TOKEN: ci-compose-validation-token
+        run: |
+          node --check mcp/sourcefoundry-mcp.mjs
+          SOURCEFOUNDRY_API_TOKEN=ci-mcp-execution-token SOURCEFOUNDRY_BASE=http://127.0.0.1:8080 node mcp/sourcefoundry-mcp.mjs < /dev/null
+          npm pack --dry-run ./mcp
+          docker compose config --quiet

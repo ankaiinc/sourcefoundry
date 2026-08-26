@@ -10,12 +10,17 @@ import type {
   SignalJob,
   SignalSource,
   SignalTenant,
+  SourceFeed,
+  SourceFeedHealth,
+  SourceFeedRun,
+  SourceFeedSource,
   SourceItem,
   SourceItemInput,
 } from './types.js';
-import { objectValue, toAgentCredential, toJob, toSource, toTenant, type SignalRepository } from './repository.js';
+import { objectValue, toAgentCredential, toJob, toSource, toSourceFeed, toTenant, type SignalRepository } from './repository.js';
 import { aggregatePublicSignals, signalKeyFor } from './signals.js';
 import { conversationFromPayload } from './conversation.js';
+import { postgresConnectionOptions } from './postgres.js';
 
 const { Pool } = pg;
 
@@ -31,8 +36,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
 
   constructor(databaseUrl: string) {
     this.pool = new Pool({
-      connectionString: databaseUrl,
-      ssl: databaseUrl.includes('sslmode=disable') ? false : { rejectUnauthorized: false },
+      ...postgresConnectionOptions(databaseUrl),
       max: 10,
     });
   }
@@ -294,6 +298,180 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
       sourceId,
     ]);
     return result.rows[0] ? toSource(result.rows[0]) : null;
+  }
+
+  async upsertSourceFeed(input: {
+    tenantId: string;
+    idempotencyKey: string;
+    name: string;
+    purpose: string;
+    everyMinutes: number;
+    maxItemsPerRun: number;
+    maxCandidatesPerRun: number;
+  }): Promise<SourceFeed> {
+    const result = await this.pool.query(
+      `INSERT INTO sourcefoundry_source_feeds (
+         tenant_id, idempotency_key, name, purpose, every_minutes, max_items_per_run, max_candidates_per_run
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (tenant_id, idempotency_key) DO UPDATE SET
+         name = EXCLUDED.name,
+         purpose = EXCLUDED.purpose,
+         every_minutes = EXCLUDED.every_minutes,
+         max_items_per_run = EXCLUDED.max_items_per_run,
+         max_candidates_per_run = EXCLUDED.max_candidates_per_run,
+         updated_at = now()
+       RETURNING *`,
+      [input.tenantId, input.idempotencyKey, input.name, input.purpose, input.everyMinutes, input.maxItemsPerRun, input.maxCandidatesPerRun],
+    );
+    return toSourceFeed(requiredRow(result.rows, 'source feed'));
+  }
+
+  async replaceSourceFeedSources(sourceFeedId: string, sources: SourceFeedSource[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM sourcefoundry_source_feed_sources WHERE source_feed_id = $1', [sourceFeedId]);
+      for (const source of sources) {
+        await client.query(
+          `INSERT INTO sourcefoundry_source_feed_sources
+             (source_feed_id, source_id, kind, required, position, config)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [sourceFeedId, source.sourceId, source.kind, source.required, source.position, source.config],
+        );
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getSourceFeed(sourceFeedId: string): Promise<SourceFeed | null> {
+    const result = await this.pool.query('SELECT * FROM sourcefoundry_source_feeds WHERE id = $1 LIMIT 1', [sourceFeedId]);
+    return result.rows[0] ? toSourceFeed(result.rows[0]) : null;
+  }
+
+  async listSourceFeedSources(sourceFeedId: string): Promise<Array<SourceFeedSource & { source: SignalSource }>> {
+    const result = await this.pool.query(
+      `SELECT fs.*, row_to_json(s) AS source
+       FROM sourcefoundry_source_feed_sources fs
+       JOIN sourcefoundry_sources s ON s.id = fs.source_id
+       WHERE fs.source_feed_id = $1
+       ORDER BY fs.position ASC, fs.source_id ASC`,
+      [sourceFeedId],
+    );
+    return result.rows.map((row) => ({
+      sourceFeedId: String(row.source_feed_id),
+      sourceId: String(row.source_id),
+      kind: row.kind as SourceFeedSource['kind'],
+      required: Boolean(row.required),
+      position: Number(row.position),
+      config: objectValue(row.config),
+      source: toSource(objectValue(row.source)),
+    }));
+  }
+
+  async createSourceFeedRun(input: { tenantId: string; sourceFeedId: string; jobIds: string[] }): Promise<SourceFeedRun> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `INSERT INTO sourcefoundry_source_feed_runs (tenant_id, source_feed_id)
+         VALUES ($1, $2) RETURNING *`,
+        [input.tenantId, input.sourceFeedId],
+      );
+      const row = requiredRow(result.rows, 'source feed run');
+      for (const jobId of [...new Set(input.jobIds)]) {
+        await client.query(
+          `INSERT INTO sourcefoundry_source_feed_run_jobs (source_feed_run_id, job_id)
+           VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+          [row.id, jobId],
+        );
+      }
+      await client.query('COMMIT');
+      return sourceFeedRun(row, input.jobIds.map(() => 'queued'), input.jobIds);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getSourceFeedRun(runId: string): Promise<SourceFeedRun | null> {
+    const result = await this.pool.query(
+      `SELECT r.*, COALESCE(array_agg(j.id) FILTER (WHERE j.id IS NOT NULL), ARRAY[]::uuid[]) AS job_ids,
+              COALESCE(array_agg(j.status) FILTER (WHERE j.id IS NOT NULL), ARRAY[]::text[]) AS job_statuses,
+              max(j.completed_at) AS completed_at
+       FROM sourcefoundry_source_feed_runs r
+       LEFT JOIN sourcefoundry_source_feed_run_jobs rj ON rj.source_feed_run_id = r.id
+       LEFT JOIN sourcefoundry_jobs j ON j.id = rj.job_id
+       WHERE r.id = $1
+       GROUP BY r.id`,
+      [runId],
+    );
+    const row = result.rows[0];
+    return row ? sourceFeedRun(row, row.job_statuses as string[], (row.job_ids as unknown[]).map(String)) : null;
+  }
+
+  async getActiveSourceFeedRun(sourceFeedId: string): Promise<SourceFeedRun | null> {
+    const result = await this.pool.query(
+      `SELECT r.id
+       FROM sourcefoundry_source_feed_runs r
+       JOIN sourcefoundry_source_feed_run_jobs rj ON rj.source_feed_run_id = r.id
+       JOIN sourcefoundry_jobs j ON j.id = rj.job_id
+       WHERE r.source_feed_id = $1
+       GROUP BY r.id, r.created_at
+       HAVING bool_and(j.status IN ('queued', 'running'))
+       ORDER BY r.created_at DESC
+       LIMIT 1`,
+      [sourceFeedId],
+    );
+    return result.rows[0] ? this.getSourceFeedRun(String(result.rows[0].id)) : null;
+  }
+
+  async getSourceFeedHealth(sourceFeedId: string): Promise<SourceFeedHealth | null> {
+    const feed = await this.getSourceFeed(sourceFeedId);
+    if (!feed) return null;
+    const sourceResult = await this.pool.query(
+      `SELECT fs.required, s.*, s.last_success_at, s.last_failure_at, s.next_fetch_at
+       FROM sourcefoundry_source_feed_sources fs
+       JOIN sourcefoundry_sources s ON s.id = fs.source_id
+       WHERE fs.source_feed_id = $1
+       ORDER BY fs.position ASC`,
+      [sourceFeedId],
+    );
+    const runResult = await this.pool.query(
+      'SELECT id FROM sourcefoundry_source_feed_runs WHERE source_feed_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [sourceFeedId],
+    );
+    const lastRun = runResult.rows[0] ? await this.getSourceFeedRun(String(runResult.rows[0].id)) : null;
+    const newest = await this.pool.query(
+      `SELECT max(c.generated_at) AS generated_at
+       FROM sourcefoundry_candidates c
+       JOIN sourcefoundry_source_items i ON i.id = c.source_item_id
+       JOIN sourcefoundry_source_feed_sources fs ON fs.source_id = i.source_id
+       WHERE fs.source_feed_id = $1`,
+      [sourceFeedId],
+    );
+    const sources = sourceResult.rows.map((row) => ({
+      source: toSource(row),
+      required: Boolean(row.required),
+      lastSuccessAt: optionalTimestamp(row.last_success_at),
+      lastFailureAt: optionalTimestamp(row.last_failure_at),
+      nextFetchAt: optionalTimestamp(row.next_fetch_at),
+    }));
+    const degraded = sources.some((entry) => entry.required && entry.source.failureCount > 0)
+      || lastRun?.status === 'partial' || lastRun?.status === 'failed';
+    return {
+      sourceFeedId,
+      status: !lastRun ? 'never_run' : degraded ? 'degraded' : 'healthy',
+      newestCandidateAt: optionalTimestamp(newest.rows[0]?.generated_at),
+      lastRun,
+      sources,
+    };
   }
 
   async enqueueSourceFetch(
@@ -641,6 +819,8 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
   async listSignals(input: {
     tenantSlug?: string;
     tenantId?: string;
+    sourceFeedId?: string;
+    since?: string;
     statuses: string[];
     limit: number;
   }): Promise<PublicSignal[]> {
@@ -669,11 +849,16 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
       JOIN sourcefoundry_sources s ON s.id = i.source_id
       WHERE ($1::uuid IS NULL OR c.tenant_id = $1::uuid)
         AND ($2::text IS NULL OR t.slug = $2)
-        AND c.status = ANY($3::text[])
+        AND ($3::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM sourcefoundry_source_feed_sources fs
+          WHERE fs.source_feed_id = $3 AND fs.source_id = i.source_id
+        ))
+        AND ($4::timestamptz IS NULL OR c.generated_at > $4)
+        AND c.status = ANY($5::text[])
       ORDER BY c.generated_at DESC
-      LIMIT $4
+      LIMIT $6
       `,
-      [input.tenantId ?? null, input.tenantSlug ?? null, input.statuses, Math.min(input.limit * 10, 1000)],
+      [input.tenantId ?? null, input.tenantSlug ?? null, input.sourceFeedId ?? null, input.since ?? null, input.statuses, Math.min(input.limit * 10, 1000)],
     );
     const signals = result.rows.map((row) => {
       const sourceMetadata = objectValue(row.source_metadata);
@@ -787,6 +972,30 @@ function requiredTimestamp(value: unknown, field: string): string {
   const timestamp = optionalTimestamp(value);
   if (!timestamp) throw new Error(`Expected ${field} timestamp`);
   return timestamp;
+}
+
+function sourceFeedRun(row: Record<string, unknown>, statuses: string[], jobIds: string[]): SourceFeedRun {
+  const terminal = statuses.length > 0 && statuses.every((status) => ['completed', 'failed', 'cancelled', 'dead_lettered'].includes(status));
+  const completed = statuses.filter((status) => status === 'completed').length;
+  const failed = statuses.filter((status) => ['failed', 'cancelled', 'dead_lettered'].includes(status)).length;
+  const status: SourceFeedRun['status'] = statuses.some((value) => value === 'running')
+    ? 'collecting'
+    : !terminal
+      ? 'queued'
+      : failed === 0
+        ? 'completed'
+        : completed > 0
+          ? 'partial'
+          : 'failed';
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id),
+    sourceFeedId: String(row.source_feed_id),
+    status,
+    jobIds,
+    createdAt: requiredTimestamp(row.created_at, 'source feed run created_at'),
+    completedAt: terminal ? optionalTimestamp(row.completed_at) : null,
+  };
 }
 
 function toItem(row: Record<string, unknown>, fallback: SourceItemInput): SourceItem {

@@ -36,14 +36,14 @@ describe('SourceFoundry runtime configuration', () => {
       NODE_ENV: 'production',
       SOURCEFOUNDRY_DATABASE_URL: 'postgres://db',
       SOURCEFOUNDRY_RELEASE_SHA: 'a'.repeat(40),
-      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'https://sources.4agents.fyi/',
-    }).publicBaseUrl).toBe('https://sources.4agents.fyi');
+      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'https://feedline.4agents.fyi/',
+    }).publicBaseUrl).toBe('https://feedline.4agents.fyi');
 
     expect(() => loadConfig({
       NODE_ENV: 'production',
       SOURCEFOUNDRY_DATABASE_URL: 'postgres://db',
       SOURCEFOUNDRY_RELEASE_SHA: 'a'.repeat(40),
-      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'http://sources.4agents.fyi',
+      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'http://feedline.4agents.fyi',
     })).toThrow('must use HTTPS');
   });
 
@@ -58,7 +58,7 @@ describe('SourceFoundry runtime configuration', () => {
       NODE_ENV: 'production',
       SOURCEFOUNDRY_DATABASE_URL: 'postgres://db',
       SOURCEFOUNDRY_RELEASE_SHA: 'a'.repeat(40),
-      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'https://sources.4agents.fyi',
+      SOURCEFOUNDRY_PUBLIC_BASE_URL: 'https://feedline.4agents.fyi',
     }).releaseSha).toBe('a'.repeat(40));
   });
 });

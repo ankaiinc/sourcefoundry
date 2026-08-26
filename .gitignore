@@ -1,7 +1,9 @@
 node_modules/
 dist/
+.gstack/
 .env
 .env.*
+!.env.example
 *.log
 .DS_Store
 supabase/.branches

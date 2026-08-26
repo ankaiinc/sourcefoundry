@@ -1,0 +1,81 @@
+name: sourcefoundry
+
+x-sourcefoundry-environment: &sourcefoundry-environment
+  SOURCEFOUNDRY_DATABASE_URL: postgresql://sourcefoundry:sourcefoundry@postgres:5432/sourcefoundry?sslmode=disable
+  SOURCEFOUNDRY_API_TOKEN: ${SOURCEFOUNDRY_API_TOKEN:?Copy .env.example to .env and set SOURCEFOUNDRY_API_TOKEN}
+  SOURCEFOUNDRY_PUBLIC_BASE_URL: ${SOURCEFOUNDRY_PUBLIC_BASE_URL:-http://localhost:8080}
+  SOURCEFOUNDRY_RELEASE_SHA: 0000000000000000000000000000000000000000
+  SOURCEFOUNDRY_SELF_SERVICE_ENABLED: "1"
+  SOURCEFOUNDRY_SELF_SERVICE_MAX_SOURCES: "3"
+  SOURCEFOUNDRY_SELF_SERVICE_MIN_INTERVAL_MINUTES: "720"
+  SOURCEFOUNDRY_SELF_SERVICE_MAX_ITEMS_PER_FETCH: "10"
+  SOURCEFOUNDRY_SELF_SERVICE_MAX_ENROLLMENTS_PER_DAY: "50"
+  SOURCEFOUNDRY_SELF_SERVICE_MAX_RUNS_PER_TENANT_PER_DAY: "6"
+  SOURCEFOUNDRY_SELF_SERVICE_MAX_RUNS_TOTAL_PER_DAY: "24"
+  TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+  EXA_API_KEY: ${EXA_API_KEY:-}
+  SERPER_API_KEY: ${SERPER_API_KEY:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sourcefoundry
+      POSTGRES_USER: sourcefoundry
+      POSTGRES_PASSWORD: sourcefoundry
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sourcefoundry -d sourcefoundry"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - sourcefoundry-data:/var/lib/postgresql/data
+
+  migrate:
+    build:
+      context: .
+      args:
+        SOURCEFOUNDRY_RELEASE_SHA: 0000000000000000000000000000000000000000
+    command: ["node", "dist/src/migrate.js"]
+    environment:
+      SOURCEFOUNDRY_DATABASE_URL: postgresql://sourcefoundry:sourcefoundry@postgres:5432/sourcefoundry?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      args:
+        SOURCEFOUNDRY_RELEASE_SHA: 0000000000000000000000000000000000000000
+    environment:
+      <<: *sourcefoundry-environment
+      NODE_ENV: development
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build:
+      context: .
+      args:
+        SOURCEFOUNDRY_RELEASE_SHA: 0000000000000000000000000000000000000000
+    command: ["node", "dist/src/worker.js"]
+    environment:
+      <<: *sourcefoundry-environment
+      NODE_ENV: development
+      SOURCEFOUNDRY_WORKER_ENABLED: "1"
+      SOURCEFOUNDRY_WORKER_INTERVAL_MS: "30000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  sourcefoundry-data:

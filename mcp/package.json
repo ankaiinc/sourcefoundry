@@ -1,0 +1,21 @@
+{
+  "name": "@sourcefoundry/mcp",
+  "version": "0.1.0",
+  "description": "Feedline MCP server — build durable source feeds and read fresh source items.",
+  "license": "MIT",
+  "homepage": "https://feedline.4agents.fyi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ankaiinc/sourcefoundry.git",
+    "directory": "mcp"
+  },
+  "keywords": ["mcp", "sources", "ingestion", "ai-agent", "sourcefoundry"],
+  "type": "module",
+  "bin": { "sourcefoundry-mcp": "./sourcefoundry-mcp.mjs" },
+  "files": ["sourcefoundry-mcp.mjs", "sourcefoundry-client.mjs", "sourcefoundry-client.d.mts", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

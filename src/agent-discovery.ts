@@ -11,7 +11,7 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     schemaVersion: SOURCEFOUNDRY_SCHEMA_VERSION,
     release: config.releaseSha,
     service: 'sourcefoundry',
-    purpose: 'Configure provider-neutral sources and retrieve normalized evidence for agents and applications.',
+    purpose: 'Build source feeds that stay fresh and retrieve new source items for agents and applications.',
     baseUrl: config.publicBaseUrl,
     discovery: {
       openapi: absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_OPENAPI_PATH),
@@ -28,14 +28,14 @@ export function agentServiceDescriptor(config: Pick<SourceFoundryConfig, 'public
     workflow: [
       'Read /v1/meta or the OpenAPI document.',
       'Create an autonomous workspace and one-time tenant-scoped credential with POST /v1/agent-enrollments.',
-      'Upsert each source with POST /v1/sources.',
-      'Enqueue a fetch with POST /v1/ingest/source and let the worker process it.',
-      'Read normalized evidence with GET /v1/signals.',
+      'Describe the required source supply with POST /v1/source-feeds and a stable Idempotency-Key.',
+      'Enqueue a bounded collection run with POST /v1/source-feeds/{sourceFeedId}/runs.',
+      'Read neutral candidates with GET /v1/source-feeds/{sourceFeedId}/candidates and inspect operational evidence at /health.',
     ],
     guardrails: [
       'Source upserts are idempotent by tenant and source URL.',
       'Active source-fetch jobs are deduplicated by tenant and source.',
-      'Provider API keys, cookies, and session tokens are managed by SourceFoundry and must never be sent in an API request.',
+      'Provider API keys, cookies, and session tokens are managed by Feedline and must never be sent in an API request.',
       'Autonomous credentials enqueue work but cannot run a job directly.',
       `Autonomous workspaces are limited to ${config.selfService.maxSources} sources, a ${config.selfService.minIntervalMinutes}-minute minimum interval, and ${config.selfService.maxItemsPerFetch} items per fetch.`,
     ],
@@ -46,17 +46,17 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
   return {
     openapi: '3.1.0',
     info: {
-      title: 'SourceFoundry API',
+      title: 'Feedline API',
       version: `1 (${config.releaseSha})`,
-      description: 'Provider-neutral source configuration and normalized evidence retrieval for agents.',
+      description: 'Recurring source feeds, fresh source items, and source-health reporting for agents.',
     },
-    servers: [{ url: config.publicBaseUrl, description: 'Canonical SourceFoundry service' }],
+    servers: [{ url: config.publicBaseUrl, description: 'Canonical Feedline service' }],
     security: [{ bearerAuth: [] }],
     paths: {
       '/health': { get: operation('Process liveness', 'Returns public service identity and release.', { security: [] }) },
       '/ready': { get: operation('Service readiness', 'Returns readiness after a database connectivity check.', { security: [] }) },
       '/v1/meta': { get: operation('Discover agent capabilities', 'Returns the supported agent workflow and authentication boundary.', { security: [] }) },
-      '/llms.txt': { get: operation('Read the agent guide', 'A machine-discoverable alias for the SourceFoundry agent guide.', { security: [] }) },
+      '/llms.txt': { get: operation('Read the agent guide', 'A machine-discoverable alias for the Feedline agent guide.', { security: [] }) },
       '/v1/agent-enrollments': {
         post: operation('Create an autonomous workspace', 'Creates a tenant-scoped credential and returns its secret exactly once. No authentication is required.', {
           security: [],
@@ -86,6 +86,58 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
               config: { type: 'object', additionalProperties: true },
             },
           }),
+        }),
+      },
+      '/v1/source-feeds': {
+        post: operation('Build a durable source feed', 'Creates or updates a recurring source-supply contract. Requires an Idempotency-Key header. Autonomous credentials infer their tenant; operator credentials provide tenantId.', {
+          parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string', maxLength: 200 } }],
+          requestBody: jsonBody({
+            type: 'object', required: ['name', 'purpose', 'sources', 'cadence'], properties: {
+              tenantId: { type: 'string', format: 'uuid', description: 'Required only for operator credentials.' },
+              name: { type: 'string', maxLength: 160 },
+              purpose: { type: 'string', maxLength: 2000 },
+              sources: { type: 'array', minItems: 1, items: {
+                type: 'object', required: ['kind', 'label'], properties: {
+                  kind: { type: 'string', enum: ['feed', 'discovery'] },
+                  label: { type: 'string' },
+                  url: { type: 'string', format: 'uri', description: 'Required for feed sources.' },
+                  provider: { type: 'string', enum: ['tavily', 'exa', 'serper'], default: 'tavily', description: 'Search provider for a discovery source. Self-hosted operators supply the matching key through the worker environment.' },
+                  required: { type: 'boolean' },
+                  queries: { type: 'array', items: { type: 'string' }, description: 'Required for discovery sources.' },
+                  includeDomains: { type: 'array', items: { type: 'string' } },
+                  excludeDomains: { type: 'array', items: { type: 'string' } },
+                },
+              } },
+              cadence: { type: 'object', required: ['everyMinutes'], properties: { everyMinutes: { type: 'integer', minimum: 5, maximum: 10080 } } },
+              limits: { type: 'object', properties: {
+                maxItemsPerRun: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+                maxCandidatesPerRun: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+              } },
+            },
+          }),
+        }),
+      },
+      '/v1/source-feeds/{sourceFeedId}/runs': {
+        post: operation('Run a source feed now', 'Fans out into the existing bounded source jobs and reuses an active feed run on retry.', {
+          parameters: [sourceFeedIdParameter()],
+        }),
+      },
+      '/v1/source-feeds/{sourceFeedId}/candidates': {
+        get: operation('Read source-feed candidates', 'Returns the existing neutral PublicSignal contract, scoped to this feed.', {
+          parameters: [sourceFeedIdParameter(),
+            { name: 'since', in: 'query', schema: { type: 'string', format: 'date-time' } },
+            { name: 'statuses', in: 'query', schema: { type: 'string' } },
+            { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } }],
+        }),
+      },
+      '/v1/source-feeds/{sourceFeedId}/health': {
+        get: operation('Inspect source-feed health', 'Returns feed-specific source failures, latest run state, and candidate freshness.', {
+          parameters: [sourceFeedIdParameter()],
+        }),
+      },
+      '/v1/source-feed-runs/{runId}': {
+        get: operation('Inspect a source-feed run', 'Derives the feed-run state from its existing durable source jobs.', {
+          parameters: [{ name: 'runId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
         }),
       },
       '/v1/sources': {
@@ -146,7 +198,7 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
     components: {
       securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'API token' } },
       responses: {
-        Unauthorized: { description: 'A valid SourceFoundry API token is required.' },
+        Unauthorized: { description: 'A valid Feedline API token is required.' },
         Error: { description: 'Versioned error response with code and retryable flag.' },
       },
     },
@@ -154,9 +206,9 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
 }
 
 export function agentGuide(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'selfService'>): string {
-  return `# SourceFoundry agent guide
+  return `# Feedline agent guide
 
-SourceFoundry turns RSS, Atom, web discovery, and approved provider searches into one normalized evidence contract. It is a source-management utility, not a reader-facing news product.
+Feedline turns RSS, Atom, and approved search-provider results into source feeds that stay fresh. Feedline handles collection, duplicate removal, original links, and source health; the consuming product owns interpretation, ranking, writing, and publication.
 
 ## Connect
 
@@ -166,13 +218,16 @@ SourceFoundry turns RSS, Atom, web discovery, and approved provider searches int
 - Create a workspace: \`POST /v1/agent-enrollments\` with a unique \`slug\`, \`name\`, and optional \`agentLabel\`. The returned token is shown once; store it as \`SOURCEFOUNDRY_API_TOKEN\`.
 - Authentication: send \`Authorization: Bearer $SOURCEFOUNDRY_API_TOKEN\` from the agent runtime secret store.
 
-## Configure and use
+## Build and use a source feed
 
 1. Read \`/v1/meta\` to confirm the service contract.
 2. Create an autonomous workspace with \`POST /v1/agent-enrollments\`; keep the returned \`tenant.id\` and token.
-3. Create or update sources with \`POST /v1/sources\`. Repeating the same tenant and URL updates the source rather than duplicating it.
-4. Enqueue a fetch with \`POST /v1/ingest/source\`. If an active job already exists, reuse its job ID.
-5. Retrieve normalized evidence with \`GET /v1/signals?tenant=<slug>\`.
+3. Call \`POST /v1/source-feeds\` with a stable \`Idempotency-Key\`, a purpose, exact feeds and/or one bounded discovery source, cadence, and limits.
+4. Enqueue collection with \`POST /v1/source-feeds/{sourceFeedId}/runs\`. A retry reuses the active feed run and its source jobs.
+5. Retrieve neutral candidates with \`GET /v1/source-feeds/{sourceFeedId}/candidates\`; use \`since\` for incremental sync.
+6. Inspect required-source failures and freshness with \`GET /v1/source-feeds/{sourceFeedId}/health\`.
+
+The lower-level source and job endpoints remain available for existing integrations, but new agents should normally use source feeds.
 
 ## First useful source
 
@@ -201,14 +256,15 @@ Save the returned \`source.id\`, then enqueue it with \`POST /v1/ingest/source\`
 }
 \`\`\`
 
-For hosted search lanes, use only a provider and endpoint explicitly allowed by
-the current source policy. Do not send a provider key. If no approved lane is
-available, return that limitation to the caller instead of silently selecting a
+For discovery, select \`tavily\`, \`exa\`, or \`serper\` on the discovery source.
+The service operator supplies the matching key through the worker secret
+environment. Do not send a provider key through this API. If no configured lane
+is available, return that limitation instead of silently selecting another
 provider or substituting an untrusted source.
 
 ## Safety rules
 
-- Treat provider credentials, cookies, and session tokens as hosted infrastructure. Never include them in a source request, source URL, or prompt.
+- Treat provider credentials, cookies, and session tokens as operator-managed infrastructure. Never include them in a source request, source URL, or prompt.
 - Configure only the tenant and sources the caller asked for.
 - Autonomous workspaces can configure at most ${config.selfService.maxSources} sources, with at least ${config.selfService.minIntervalMinutes} minutes between fetches and at most ${config.selfService.maxItemsPerFetch} items per fetch.
 - Enqueue work; autonomous credentials cannot call \`run-once\`, because direct execution can make an unbounded provider request.
@@ -237,6 +293,10 @@ function jsonBody(schema: Record<string, unknown>): Record<string, unknown> {
 
 function tenantParameter(): Record<string, unknown> {
   return { name: 'tenant', in: 'query', schema: { type: 'string', example: 'acme-research' } };
+}
+
+function sourceFeedIdParameter(): Record<string, unknown> {
+  return { name: 'sourceFeedId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } };
 }
 
 function tenantIdParameter(): Record<string, unknown> {

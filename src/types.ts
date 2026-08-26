@@ -36,6 +36,55 @@ export interface SignalSource {
   metadata: JsonRecord;
 }
 
+export type SourceFeedSourceKind = 'feed' | 'page' | 'discovery';
+
+export interface SourceFeed {
+  id: string;
+  tenantId: string;
+  idempotencyKey: string;
+  name: string;
+  purpose: string;
+  status: 'active' | 'paused';
+  everyMinutes: number;
+  maxItemsPerRun: number;
+  maxCandidatesPerRun: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SourceFeedSource {
+  sourceFeedId: string;
+  sourceId: string;
+  kind: SourceFeedSourceKind;
+  required: boolean;
+  position: number;
+  config: JsonRecord;
+}
+
+export interface SourceFeedRun {
+  id: string;
+  tenantId: string;
+  sourceFeedId: string;
+  status: 'queued' | 'collecting' | 'completed' | 'partial' | 'failed';
+  jobIds: string[];
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface SourceFeedHealth {
+  sourceFeedId: string;
+  status: 'healthy' | 'degraded' | 'never_run';
+  newestCandidateAt: string | null;
+  lastRun: SourceFeedRun | null;
+  sources: Array<{
+    source: SignalSource;
+    required: boolean;
+    lastSuccessAt: string | null;
+    lastFailureAt: string | null;
+    nextFetchAt: string | null;
+  }>;
+}
+
 export interface SignalJob {
   id: string;
   tenantId: string;

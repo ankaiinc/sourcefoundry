@@ -1,5 +1,10 @@
-node_modules
-dist
-*.log
+.git
+.github
+.gstack
 .env
 .env.*
+!.env.example
+dist
+node_modules
+*.log
+.DS_Store
