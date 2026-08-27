@@ -1,12 +1,31 @@
-# SourceFoundry
+<div align="center">
+  <a href="https://sourcefoundry.4agents.fyi">
+    <img src="public/favicon.svg" width="72" height="72" alt="SourceFoundry" />
+  </a>
 
-Give your coding agent a source feed that stays fresh.
+  <h1>SourceFoundry</h1>
+
+  <p><strong>Give your coding agent a source feed that stays fresh.</strong></p>
+
+  <p>
+    <a href="https://github.com/ankaiinc/sourcefoundry/actions/workflows/ci.yml"><img src="https://github.com/ankaiinc/sourcefoundry/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+    <a href="https://github.com/ankaiinc/sourcefoundry/releases/latest"><img src="https://img.shields.io/github/v/release/ankaiinc/sourcefoundry?display_name=tag&amp;sort=semver" alt="Latest release" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/ankaiinc/sourcefoundry" alt="MIT license" /></a>
+    <a href="https://github.com/orgs/ankaiinc/packages/container/package/sourcefoundry"><img src="https://img.shields.io/badge/container-ghcr.io-2496ED?logo=docker&amp;logoColor=white" alt="GitHub Container Registry" /></a>
+  </p>
+
+  <p>
+    <a href="https://sourcefoundry.4agents.fyi">Hosted service</a>
+    · <a href="https://sourcefoundry.4agents.fyi/agent.md">Agent guide</a>
+    · <a href="https://sourcefoundry.4agents.fyi/openapi.json">OpenAPI</a>
+    · <a href="docs/self-hosting.md">Self-hosting</a>
+    · <a href="mcp/README.md">MCP</a>
+  </p>
+</div>
 
 SourceFoundry continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Coding agents use those results to build news feeds, market trackers, daily briefs, policy monitors, and research streams.
 
-[Hosted service](https://sourcefoundry.4agents.fyi) · [Agent guide](https://sourcefoundry.4agents.fyi/agent.md) · [OpenAPI](https://sourcefoundry.4agents.fyi/openapi.json) · [Self-hosting](docs/self-hosting.md) · [Operations](docs/operations.md) · [MCP](mcp/README.md)
-
-**Release status:** public beta. `v0.1.x` keeps the source-feed REST contract stable while self-hosting and provider integrations are hardened through real use.
+> **Public beta:** `v0.1.x` keeps the source-feed REST contract stable while self-hosting and provider integrations are hardened through real use.
 
 ## Why this exists
 
