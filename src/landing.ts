@@ -81,6 +81,8 @@ export function landingPage(baseUrl: string): string {
     .button.secondary:hover { color:var(--blue-dark); background:var(--surface); border-color:var(--blue); }
     .button.light { color:var(--ink); background:#fff; border-color:#fff; }
     .button.light:hover { color:var(--ink); background:var(--sensor); border-color:var(--sensor); }
+    .button.github { color:#fff; background:var(--ink); border-color:var(--ink); }
+    .button.github:hover { color:var(--ink); background:var(--sensor); border-color:var(--sensor); }
 
     .site-nav { position:relative; z-index:20; border-bottom:1px solid var(--steel); background:rgba(246,248,251,.92); backdrop-filter:blur(14px); }
     .nav-inner { min-height:76px; display:flex; align-items:center; justify-content:space-between; gap:28px; }
@@ -91,6 +93,9 @@ export function landingPage(baseUrl: string): string {
     .brand-status { margin-left:2px; color:var(--muted); font-family:"Spline Sans Mono",SFMono-Regular,Consolas,monospace; font-size:10px; letter-spacing:.06em; text-transform:uppercase; }
     .nav-links { display:flex; align-items:center; gap:26px; font-size:14px; font-weight:550; }
     .nav-links a { text-decoration:none; }
+    .nav-github { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid var(--steel); border-radius:5px; background:var(--surface); color:var(--ink); }
+    .nav-github:hover { border-color:var(--ink); color:var(--ink); }
+    .nav-github svg { width:17px; height:17px; }
     .nav-cta { padding:9px 13px; border-radius:5px; background:var(--ink); color:#fff!important; }
 
     .hero { position:relative; overflow:hidden; padding:100px 0 58px; background:var(--surface); }
@@ -124,6 +129,18 @@ export function landingPage(baseUrl: string): string {
     .truth + .truth { padding-left:34px; border-left:1px solid var(--steel); }
     .truth span { color:var(--muted); font-family:"Spline Sans Mono",SFMono-Regular,Consolas,monospace; font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
     .truth strong { display:block; margin-top:18px; font-size:23px; font-weight:620; letter-spacing:-.025em; line-height:1.25; }
+
+    .open-source-band { padding:54px 0; background:var(--ink); color:#fff; }
+    .open-source-inner { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:54px; align-items:center; }
+    .open-source-copy { display:grid; grid-template-columns:minmax(260px,.72fr) minmax(320px,1fr); gap:48px; align-items:center; }
+    .open-source-copy h2 { margin:0; font-size:clamp(34px,3.6vw,54px); font-weight:650; letter-spacing:-.05em; line-height:1; }
+    .open-source-copy p { margin:0; color:#b8c3d5; font-size:17px; line-height:1.55; }
+    .open-source-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }
+    .open-source-actions .button { white-space:nowrap; }
+    .open-source-actions .button.star { color:var(--ink); background:var(--sensor); border-color:var(--sensor); }
+    .open-source-actions .button.star:hover { background:#d7ff4f; border-color:#d7ff4f; }
+    .open-source-actions .button.source { color:#fff; background:transparent; border-color:#52627d; }
+    .open-source-actions .button.source:hover { background:#172238; border-color:#8b99b1; }
 
     .mechanism { padding:130px 0; background:var(--ink); color:#fff; }
     .mechanism .section-copy { color:#aeb8c9; }
@@ -218,13 +235,16 @@ export function landingPage(baseUrl: string): string {
     }
     @media (max-width:980px) {
       .shell { width:min(100% - 40px,var(--max)); }
-      .brand-status,.nav-links a:not(.nav-cta) { display:none; }
+      .brand-status,.nav-links a:not(.nav-cta):not(.nav-github) { display:none; }
+      .nav-links { gap:10px; }
       .hero { padding-top:74px; }
       .hero-grid,.agent-grid { grid-template-columns:1fr; gap:42px; }
       .hero-side { max-width:680px; }
       .truth-inner { grid-template-columns:1fr; }
       .truth { padding:26px 0; }
       .truth + .truth { padding-left:0; border-left:0; border-top:1px solid var(--steel); }
+      .open-source-inner,.open-source-copy { grid-template-columns:1fr; gap:24px; }
+      .open-source-actions { justify-content:flex-start; }
       .stages { grid-template-columns:1fr; gap:0; }
       .stages:before { top:0; bottom:0; left:23px; right:auto; width:2px; height:auto; }
       .stage { min-height:144px; padding:0 0 30px 78px; }
@@ -246,6 +266,9 @@ export function landingPage(baseUrl: string): string {
       .shell { width:min(100% - 28px,var(--max)); }
       .nav-inner { min-height:66px; }
       .brand-mark { width:44px; }
+      .brand-name { font-size:19px; }
+      .nav-links .nav-cta { display:none; }
+      .nav-github { padding:7px 9px; font-size:12px; }
       .nav-cta { padding:8px 10px; font-size:12px; }
       .hero { padding-top:58px; }
       h1 { font-size:clamp(53px,17vw,76px); line-height:.96; }
@@ -267,6 +290,9 @@ export function landingPage(baseUrl: string): string {
       .mobile-candidate:after { content:"SOURCE · 09:47"; position:absolute; left:14px; bottom:8px; color:var(--muted); font-family:"Spline Sans Mono",SFMono-Regular,Consolas,monospace; font-size:8px; }
       .mobile-output { position:absolute; bottom:30px; left:50%; width:100%; text-align:center; font-size:12px; font-weight:650; transform:translateX(-50%); }
       .mechanism,.outputs,.comparison,.agent-handoff,.operating { padding:92px 0; }
+      .open-source-band { padding:44px 0; }
+      .open-source-copy { gap:16px; }
+      .open-source-actions { flex-direction:column; align-items:stretch; }
       .section-title { font-size:clamp(40px,12vw,58px); }
       .output-tabs { grid-template-columns:1fr; }
       .output-display { min-height:520px; padding:32px 24px; }
@@ -297,7 +323,7 @@ export function landingPage(baseUrl: string): string {
       <div class="nav-links">
         <a href="#line">How it works</a>
         <a href="#outputs">Examples</a>
-        <a href="https://github.com/ankaiinc/sourcefoundry">Open source</a>
+        <a class="nav-github" href="https://github.com/ankaiinc/sourcefoundry" aria-label="Star SourceFoundry on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.24.7-3.92-1.38-3.92-1.38-.53-1.35-1.3-1.7-1.3-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.74-1.55-2.59-.3-5.3-1.3-5.3-5.68 0-1.25.44-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.17a10.9 10.9 0 0 1 5.75 0c2.2-1.48 3.16-1.17 3.16-1.17.62 1.58.23 2.75.11 3.04.73.8 1.18 1.83 1.18 3.08 0 4.39-2.72 5.38-5.31 5.67.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>Star on GitHub</a>
         <a class="nav-cta" href="#agent">Connect your agent</a>
       </div>
     </div>
@@ -314,7 +340,7 @@ export function landingPage(baseUrl: string): string {
             <p>SourceFoundry continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Your agent uses those results to build news feeds, trackers, briefs, and research.</p>
             <div class="hero-actions">
               <a class="button" href="#agent">Connect your coding agent <span aria-hidden="true">→</span></a>
-              <a class="button secondary" href="#outputs">See examples</a>
+              <a class="button github" href="https://github.com/ankaiinc/sourcefoundry"><span aria-hidden="true">★</span> Star SourceFoundry on GitHub</a>
             </div>
             <div class="hero-note"><span class="pulse" aria-hidden="true"></span>No dashboard. Your coding agent operates SourceFoundry.</div>
           </div>
@@ -367,6 +393,19 @@ export function landingPage(baseUrl: string): string {
         <div class="truth"><span>You tell your agent</span><strong>What to track, which sources to use, and how often to check.</strong></div>
         <div class="truth"><span>SourceFoundry handles</span><strong>Fetching, retries, duplicate removal, original links, and failure monitoring.</strong></div>
         <div class="truth"><span>Your agent handles</span><strong>Choosing what matters, writing, ranking, and publishing.</strong></div>
+      </div>
+    </section>
+
+    <section class="open-source-band" aria-labelledby="open-source-title">
+      <div class="shell open-source-inner">
+        <div class="open-source-copy">
+          <h2 id="open-source-title">SourceFoundry is open source.</h2>
+          <p>MIT licensed. Read every line, run it on your infrastructure, bring your own provider accounts, and keep control of the source operation.</p>
+        </div>
+        <div class="open-source-actions">
+          <a class="button star" href="https://github.com/ankaiinc/sourcefoundry"><span aria-hidden="true">★</span> Star SourceFoundry</a>
+          <a class="button source" href="https://github.com/ankaiinc/sourcefoundry#run-it-yourself">View code &amp; self-host</a>
+        </div>
       </div>
     </section>
 
@@ -466,7 +505,7 @@ Do not rank, summarize, or publish unless I ask.</pre>
       <div class="final-content reveal">
         <h2>Keep your product supplied.</h2>
         <p>Tell your coding agent what to track. SourceFoundry will keep checking the sources.</p>
-        <div class="hero-actions" style="justify-content:center"><button class="button" type="button" data-copy="${escapedPrompt}">Copy prompt for your agent</button><a class="button secondary" href="https://github.com/ankaiinc/sourcefoundry">View the open-source repo</a></div>
+        <div class="hero-actions" style="justify-content:center"><button class="button" type="button" data-copy="${escapedPrompt}">Copy prompt for your agent</button><a class="button github" href="https://github.com/ankaiinc/sourcefoundry"><span aria-hidden="true">★</span> Star SourceFoundry on GitHub</a></div>
       </div>
     </section>
   </main>

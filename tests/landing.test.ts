@@ -16,6 +16,10 @@ describe('SourceFoundry landing page', () => {
     expect(page).toContain('Search gives your agent a pile. SourceFoundry gives it a supply line.');
     expect(page).toContain('Connect SourceFoundry to your coding agent.');
     expect(page).toContain('Use our hosted service, or run SourceFoundry yourself.');
+    expect(page).toContain('SourceFoundry is open source.');
+    expect(page).toContain('MIT licensed. Read every line, run it on your infrastructure');
+    expect(page).toContain('View code &amp; self-host');
+    expect(page.match(/Star SourceFoundry(?: on GitHub)?/g)?.length).toBeGreaterThanOrEqual(3);
     expect(page).toContain('docker compose up --build');
     expect(page).toContain('Tavily, Exa, or Serper');
     expect(page).toContain('https://github.com/ankaiinc/sourcefoundry');
