@@ -49,6 +49,9 @@ describe('SourceFoundry agent discovery', () => {
 
   it('makes safe boundaries explicit for autonomous agents', () => {
     const guide = agentGuide(config);
+    expect(guide).toContain('## Set up the hosted service');
+    expect(guide).toContain('SourceFoundry returns an API token exactly once');
+    expect(guide).toContain('## Create the feed and read new items');
     expect(guide).toContain('SOURCEFOUNDRY_API_TOKEN');
     expect(guide).toContain('/v1/agent-enrollments');
     expect(guide).toContain('First useful source');

@@ -208,17 +208,19 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
 export function agentGuide(config: Pick<SourceFoundryConfig, 'publicBaseUrl' | 'selfService'>): string {
   return `# SourceFoundry agent guide
 
-SourceFoundry turns RSS, Atom, and approved search-provider results into source feeds that stay fresh. SourceFoundry handles collection, duplicate removal, original links, and source health; the consuming product owns interpretation, ranking, writing, and publication.
+Tell SourceFoundry which RSS feeds and search queries to check. It runs them on a schedule, converts every result into the same set of fields, removes duplicate links, keeps the original links, and reports sources that fail or stop updating. The consuming agent decides what to use, rank, write, or publish.
 
-## Connect
+Use the hosted instructions below when the user wants SourceFoundry to operate the server. To run SourceFoundry on the user's own infrastructure, follow https://github.com/ankaiinc/sourcefoundry/blob/main/docs/self-hosting.md first, then use the same source-feed workflow against that installation.
+
+## Set up the hosted service
 
 - Base URL: ${config.publicBaseUrl}
 - OpenAPI: ${absoluteUrl(config.publicBaseUrl, SOURCEFOUNDRY_OPENAPI_PATH)}
 - Capability discovery: ${config.publicBaseUrl}/v1/meta
-- Create a workspace: \`POST /v1/agent-enrollments\` with a unique \`slug\`, \`name\`, and optional \`agentLabel\`. The returned token is shown once; store it as \`SOURCEFOUNDRY_API_TOKEN\`.
+- Create a workspace: \`POST /v1/agent-enrollments\` with a unique \`slug\`, \`name\`, and optional \`agentLabel\`. SourceFoundry returns an API token exactly once. Store it in the agent runtime secret store as \`SOURCEFOUNDRY_API_TOKEN\` before continuing.
 - Authentication: send \`Authorization: Bearer $SOURCEFOUNDRY_API_TOKEN\` from the agent runtime secret store.
 
-## Build and use a source feed
+## Create the feed and read new items
 
 1. Read \`/v1/meta\` to confirm the service contract.
 2. Create an autonomous workspace with \`POST /v1/agent-enrollments\`; keep the returned \`tenant.id\` and token.

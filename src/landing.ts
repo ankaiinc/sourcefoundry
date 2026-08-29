@@ -9,12 +9,12 @@ export function landingPage(baseUrl: string): string {
     name: 'SourceFoundry',
     applicationCategory: 'DeveloperApplication',
     operatingSystem: 'Any',
-    description: 'SourceFoundry continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents.',
+    description: 'Tell SourceFoundry which feeds and searches to check. It gives your coding agent new source items, original links, and source failures on every run.',
     url: baseUrl,
     codeRepository: 'https://github.com/ankaiinc/sourcefoundry',
     license: 'https://opensource.org/license/mit',
   }).replace(/</g, '\\u003c');
-  const agentPrompt = `Open ${baseUrl}/agent.md. Set up SourceFoundry, store SOURCEFOUNDRY_API_TOKEN in your secret store, then build a recurring source feed from the sources I describe. Run it and return new source items with links, dates, original sources, completeness, and source health. Do not rank, summarize, or publish unless I ask.`;
+  const agentPrompt = `Open ${baseUrl}/agent.md and follow its hosted setup instructions. Create a SourceFoundry workspace, store the one-time token in your secret store as SOURCEFOUNDRY_API_TOKEN, then build a recurring source feed from the feeds and search queries I describe. Run the feed and return only source items added since the previous read, with dates, original links, completeness, and any source failures. Do not rank, summarize, or publish unless I ask.`;
   const escapedPrompt = escapeHtml(agentPrompt);
 
   return `<!doctype html>
@@ -22,14 +22,14 @@ export function landingPage(baseUrl: string): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="SourceFoundry continuously collects, cleans, and monitors sources for news feeds, trackers, briefs, and research agents." />
+  <meta name="description" content="Tell SourceFoundry which feeds and searches to check. It gives your coding agent new source items, original links, and source failures on every run." />
   <meta name="robots" content="index,follow,max-image-preview:large" />
   <meta name="theme-color" content="#F6F8FB" />
   <link rel="canonical" href="${origin}/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="SourceFoundry" />
   <meta property="og:title" content="SourceFoundry — source feeds that stay fresh" />
-  <meta property="og:description" content="Continuously collect, clean, and monitor sources for news feeds, trackers, briefs, and research agents." />
+  <meta property="og:description" content="Tell SourceFoundry which feeds and searches to check. It gives your coding agent new source items, original links, and source failures on every run." />
   <meta property="og:url" content="${origin}/" />
   <meta property="og:image" content="${socialImage}" />
   <meta property="og:image:width" content="1200" />
@@ -37,7 +37,7 @@ export function landingPage(baseUrl: string): string {
   <meta property="og:image:alt" content="SourceFoundry conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SourceFoundry — source feeds that stay fresh" />
-  <meta name="twitter:description" content="Continuously collect, clean, and monitor sources for news feeds, trackers, briefs, and research agents." />
+  <meta name="twitter:description" content="Tell SourceFoundry which feeds and searches to check. It gives your coding agent new source items, original links, and source failures on every run." />
   <meta name="twitter:image" content="${socialImage}" />
   <meta name="twitter:image:alt" content="SourceFoundry conveyor diagram moving RSS, official sources, and search results into fresh source items for agents." />
   <link rel="icon" href="${origin}/favicon.svg" type="image/svg+xml" />
@@ -46,7 +46,7 @@ export function landingPage(baseUrl: string): string {
   <link href="https://fonts.googleapis.com/css2?family=Spline+Sans:wght@400..700&amp;family=Spline+Sans+Mono:wght@400..700&amp;display=swap" rel="stylesheet" />
   <link rel="alternate" type="text/markdown" href="${origin}/agent.md" title="SourceFoundry agent guide" />
   <link rel="alternate" type="text/plain" href="${origin}/llms.txt" title="SourceFoundry LLM instructions" />
-  <title>SourceFoundry — source supply for agents</title>
+  <title>SourceFoundry — recurring source feeds for coding agents</title>
   <script type="application/ld+json">${structuredData}</script>
   <style>
     :root {
@@ -318,13 +318,13 @@ export function landingPage(baseUrl: string): string {
       <a class="brand" href="/" aria-label="SourceFoundry home">
         <svg class="brand-mark" viewBox="0 0 56 32" aria-hidden="true"><path d="M1 16h41" fill="none" stroke="#1457ff" stroke-width="2.5" stroke-linecap="round"/><rect x="19" y="2" width="15" height="28" rx="3" fill="#f6f8fb" stroke="#0b1220" stroke-width="2.5"/><path d="M34 16l13 13h8" fill="none" stroke="#c9362b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="16" r="4" fill="#1457ff"/><rect x="38" y="12" width="8" height="8" rx="2" fill="#1457ff"/></svg>
         <span class="brand-name">SourceFoundry</span>
-        <span class="brand-status">Source supply for agents</span>
+        <span class="brand-status">Recurring source feeds for agents</span>
       </a>
       <div class="nav-links">
         <a href="#line">How it works</a>
         <a href="#outputs">Examples</a>
         <a class="nav-github" href="https://github.com/ankaiinc/sourcefoundry" aria-label="Star SourceFoundry on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.24.7-3.92-1.38-3.92-1.38-.53-1.35-1.3-1.7-1.3-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.74-1.55-2.59-.3-5.3-1.3-5.3-5.68 0-1.25.44-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.17a10.9 10.9 0 0 1 5.75 0c2.2-1.48 3.16-1.17 3.16-1.17.62 1.58.23 2.75.11 3.04.73.8 1.18 1.83 1.18 3.08 0 4.39-2.72 5.38-5.31 5.67.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>Star on GitHub</a>
-        <a class="nav-cta" href="#agent">Connect your agent</a>
+        <a class="nav-cta" href="#agent">Set it up</a>
       </div>
     </div>
   </nav>
@@ -337,12 +337,12 @@ export function landingPage(baseUrl: string): string {
             <h1>Give your agent a source feed that stays fresh.</h1>
           </div>
           <div class="hero-side">
-            <p>SourceFoundry continuously checks RSS feeds and search providers, removes duplicate results, keeps the original links, and reports source failures. Your agent uses those results to build news feeds, trackers, briefs, and research.</p>
+            <p>Tell SourceFoundry which RSS feeds and search queries to check. It runs them on a schedule, removes duplicate results, keeps the original links, and tells your coding agent what is new and which sources failed. Your agent decides what to use, write, rank, or publish.</p>
             <div class="hero-actions">
-              <a class="button" href="#agent">Connect your coding agent <span aria-hidden="true">→</span></a>
+              <a class="button" href="#agent">Set it up with your agent <span aria-hidden="true">→</span></a>
               <a class="button github" href="https://github.com/ankaiinc/sourcefoundry"><span aria-hidden="true">★</span> Star SourceFoundry on GitHub</a>
             </div>
-            <div class="hero-note"><span class="pulse" aria-hidden="true"></span>No dashboard. Your coding agent operates SourceFoundry.</div>
+            <div class="hero-note"><span class="pulse" aria-hidden="true"></span>No dashboard. Your coding agent sets up and uses SourceFoundry.</div>
           </div>
         </div>
 
@@ -391,7 +391,7 @@ export function landingPage(baseUrl: string): string {
     <section class="truth-strip" aria-label="Product responsibility boundary">
       <div class="shell truth-inner">
         <div class="truth"><span>You tell your agent</span><strong>What to track, which sources to use, and how often to check.</strong></div>
-        <div class="truth"><span>SourceFoundry handles</span><strong>Fetching, retries, duplicate removal, original links, and failure monitoring.</strong></div>
+        <div class="truth"><span>SourceFoundry handles</span><strong>Scheduled checks, retries, duplicate removal, original links, and failed-source reports.</strong></div>
         <div class="truth"><span>Your agent handles</span><strong>Choosing what matters, writing, ranking, and publishing.</strong></div>
       </div>
     </section>
@@ -400,7 +400,7 @@ export function landingPage(baseUrl: string): string {
       <div class="shell open-source-inner">
         <div class="open-source-copy">
           <h2 id="open-source-title">SourceFoundry is open source.</h2>
-          <p>MIT licensed. Read every line, run it on your infrastructure, bring your own provider accounts, and keep control of the source operation.</p>
+          <p>MIT licensed. Read the code, run it on your infrastructure, use your own search-provider accounts, and control how your sources are collected and stored.</p>
         </div>
         <div class="open-source-actions">
           <a class="button star" href="https://github.com/ankaiinc/sourcefoundry"><span aria-hidden="true">★</span> Star SourceFoundry</a>
@@ -457,12 +457,12 @@ export function landingPage(baseUrl: string): string {
 
     <section class="mechanism" aria-labelledby="mechanism-title">
       <div class="shell">
-        <div class="reveal"><h2 class="section-title" id="mechanism-title">SourceFoundry checks your sources and gives your agent only what is new.</h2><p class="section-copy">It runs on a schedule, removes duplicate results, keeps the original links, and shows you when a source fails.</p></div>
+        <div class="reveal"><h2 class="section-title" id="mechanism-title">Set it up once. Your agent can read new source items on every run.</h2><p class="section-copy">The hosted setup takes four steps. Your agent performs each one from the instructions you copy below.</p></div>
         <div class="stages reveal">
-          <div class="stage"><span class="stage-index">01</span><h3>Your agent sets it up</h3><p>Tell it what to track, which feeds or search queries to use, and how often to check.</p></div>
-          <div class="stage"><span class="stage-index">02</span><h3>SourceFoundry checks sources</h3><p>It reads RSS feeds and calls the search provider you choose.</p></div>
-          <div class="stage"><span class="stage-index">03</span><h3>SourceFoundry cleans results</h3><p>It uses one format, removes duplicate links, and keeps each original source.</p></div>
-          <div class="stage"><span class="stage-index">04</span><h3>Your agent gets updates</h3><p>It reads only the new results and sees which sources failed or went stale.</p></div>
+          <div class="stage"><span class="stage-index">01</span><h3>Copy the setup prompt</h3><p>Give it to a coding agent that can open a URL, call an API, and save a secret.</p></div>
+          <div class="stage"><span class="stage-index">02</span><h3>Your agent creates a workspace</h3><p>SourceFoundry returns one API token. Your agent stores it in its secret store, not in the prompt.</p></div>
+          <div class="stage"><span class="stage-index">03</span><h3>Describe what to track</h3><p>Name the RSS feeds or search queries to check and how often SourceFoundry should run.</p></div>
+          <div class="stage"><span class="stage-index">04</span><h3>Your agent reads the updates</h3><p>It receives new items with dates and original links, plus any sources that failed or stopped updating.</p></div>
         </div>
         <div class="boundary reveal"><strong>SourceFoundry does not decide what is true or important.</strong><span>Your agent decides what to use, write, rank, or publish.</span></div>
       </div>
@@ -471,18 +471,18 @@ export function landingPage(baseUrl: string): string {
     <section class="agent-handoff" id="agent">
       <div class="shell agent-grid">
         <div class="reveal">
-          <h2>Connect SourceFoundry to your coding agent.</h2>
-          <p class="lead">There is no SourceFoundry dashboard. Your agent reads the setup guide, creates the feed, runs it, and retrieves new source items through MCP or REST.</p>
-          <div class="agent-actions"><button class="button light" type="button" data-copy="${escapedPrompt}">Copy the agent prompt</button><a class="button" href="${origin}/agent.md">Open agent.md</a></div>
+          <h2>Give these instructions to your coding agent.</h2>
+          <p class="lead">Your agent will create a hosted workspace, save the API token as a secret, build the feed you describe, run it, and return new source items. You do not need to install a dashboard.</p>
+          <div class="agent-actions"><button class="button light" type="button" data-copy="${escapedPrompt}">Copy the setup prompt</button><a class="button" href="${origin}/agent.md">Read the setup guide</a></div>
           <p class="agent-proof">MCP: build_source_feed · read_source_feed</p>
         </div>
         <div class="prompt-panel reveal">
           <div class="panel-top"><span>Prompt for your coding agent</span><span class="panel-status">Ready</span></div>
           <pre class="prompt-text">Open ${origin}/agent.md.
 
-Set up SourceFoundry and store SOURCEFOUNDRY_API_TOKEN in your secret store.
+Follow the hosted setup instructions. Create a SourceFoundry workspace and store the one-time token in your secret store as SOURCEFOUNDRY_API_TOKEN.
 
-Build a recurring source feed from the sources I describe. Run it and return new source items with links, dates, original sources, completeness, and source health.
+Build a recurring source feed from the feeds and search queries I describe. Run it and return only source items added since the previous read, with dates, original links, completeness, and any source failures.
 
 Do not rank, summarize, or publish unless I ask.</pre>
           <div class="panel-footer"><span>Credential enters the agent runtime—not the prompt.</span><button class="copy-button" type="button" data-copy="${escapedPrompt}">Copy prompt</button></div>
@@ -492,10 +492,10 @@ Do not rank, summarize, or publish unless I ask.</pre>
 
     <section class="operating">
       <div class="shell">
-        <div class="reveal"><h2 class="section-title">Use our hosted service, or run SourceFoundry yourself.</h2><p class="section-copy">In either case, your coding agent connects through MCP or REST. There is no dashboard.</p></div>
+        <div class="reveal"><h2 class="section-title">Use our hosted service, or run SourceFoundry yourself.</h2><p class="section-copy">The agent workflow is the same. The difference is who operates the server, database, schedules, and provider accounts.</p></div>
         <div class="operating-list reveal">
-          <article class="operating-row"><span class="operating-index">01 · HOSTED</span><h3>We run SourceFoundry for you</h3><p>Your agent connects to our service. We run the API, database, schedules, and source monitoring.</p><code>GET ${origin}/agent.md</code></article>
-          <article class="operating-row"><span class="operating-index">02 · SELF-HOST</span><h3>Run it on your infrastructure</h3><p>Deploy the open-source service. For search, use your own Tavily, Exa, or Serper account.</p><code>docker compose up --build</code></article>
+          <article class="operating-row"><span class="operating-index">01 · HOSTED</span><h3>Use it without running a server</h3><p>Your agent connects to our service. We operate the API, database, schedules, and source checks.</p><code>GET ${origin}/agent.md</code></article>
+          <article class="operating-row"><span class="operating-index">02 · SELF-HOST</span><h3>Keep it on your infrastructure</h3><p>Deploy the open-source service. Your source data stays in your database. For search, use your own Tavily, Exa, or Serper account.</p><code>docker compose up --build</code></article>
           <article class="operating-row"><span class="operating-index">03 · AGENT ACCESS</span><h3>Connect through MCP or REST</h3><p>Hosted and self-hosted installations support the same workflow for your coding agent.</p><code>build_source_feed · read_source_feed</code></article>
         </div>
       </div>
@@ -504,8 +504,8 @@ Do not rank, summarize, or publish unless I ask.</pre>
     <section class="final-line">
       <div class="final-content reveal">
         <h2>Keep your product supplied.</h2>
-        <p>Tell your coding agent what to track. SourceFoundry will keep checking the sources.</p>
-        <div class="hero-actions" style="justify-content:center"><button class="button" type="button" data-copy="${escapedPrompt}">Copy prompt for your agent</button><a class="button github" href="https://github.com/ankaiinc/sourcefoundry"><span aria-hidden="true">★</span> Star SourceFoundry on GitHub</a></div>
+        <p>Copy the setup prompt, then tell your coding agent which feeds and searches to check.</p>
+        <div class="hero-actions" style="justify-content:center"><button class="button" type="button" data-copy="${escapedPrompt}">Copy the setup prompt</button><a class="button github" href="https://github.com/ankaiinc/sourcefoundry"><span aria-hidden="true">★</span> Star SourceFoundry on GitHub</a></div>
       </div>
     </section>
   </main>
