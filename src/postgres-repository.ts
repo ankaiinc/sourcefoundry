@@ -268,8 +268,22 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
     const result = await this.pool.query(
       `
       SELECT *
-      FROM sourcefoundry_sources
-      WHERE enabled = true AND next_fetch_at <= $1
+      FROM (
+        SELECT DISTINCT ON (
+          tenant_id,
+          COALESCE(NULLIF(metadata->>'fallback_group', ''), id::text)
+        ) *
+        FROM sourcefoundry_sources
+        WHERE enabled = true AND next_fetch_at <= $1
+        ORDER BY
+          tenant_id,
+          COALESCE(NULLIF(metadata->>'fallback_group', ''), id::text),
+          next_fetch_at ASC,
+          failure_count ASC,
+          CASE WHEN (metadata->>'provider_rank') ~ '^[0-9]+$'
+            THEN (metadata->>'provider_rank')::integer ELSE 1000 END ASC,
+          id ASC
+      ) ranked
       ORDER BY next_fetch_at ASC
       LIMIT $2
       `,
@@ -864,6 +878,7 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
       const sourceMetadata = objectValue(row.source_metadata);
       const rawPayload = objectValue(row.raw_payload);
       const rawDiscovery = objectValue(rawPayload.raw);
+      const providerRaw = objectValue(rawDiscovery.raw);
       const fetchedAt = requiredTimestamp(row.fetched_at, 'fetched_at');
       const itemPublishedAt = optionalTimestamp(row.item_published_at);
       const author = String(row.author ?? '').trim();
@@ -896,6 +911,15 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
           contentHash: String(row.content_hash),
           author: author || null,
           query: typeof rawDiscovery.query === 'string' && rawDiscovery.query.trim() ? rawDiscovery.query : null,
+          discovery: {
+            trustLevel: sourceMetadata.provider === 'x' ? 'authoritative' as const
+              : sourceMetadata.mode === 'discovery' ? 'indexed' as const
+                : 'unknown' as const,
+            creatorHandle: typeof providerRaw.creator_username === 'string' && providerRaw.creator_username.trim()
+              ? providerRaw.creator_username : null,
+            externalUrls: Array.isArray(providerRaw.external_urls)
+              ? providerRaw.external_urls.filter((value): value is string => typeof value === 'string') : [],
+          },
         },
         ...conversationField(rawPayload),
         freshness: {

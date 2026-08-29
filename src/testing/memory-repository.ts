@@ -512,6 +512,9 @@ export class MemorySignalRepository implements SignalRepository {
     const rawDiscovery = item.rawPayload.raw && typeof item.rawPayload.raw === 'object' && !Array.isArray(item.rawPayload.raw)
       ? item.rawPayload.raw as JsonRecord
       : {};
+    const providerRaw = rawDiscovery.raw && typeof rawDiscovery.raw === 'object' && !Array.isArray(rawDiscovery.raw)
+      ? rawDiscovery.raw as JsonRecord
+      : {};
     const query = typeof rawDiscovery.query === 'string' ? rawDiscovery.query : null;
     const existing = this.candidates.get(key);
     if (existing) {
@@ -572,6 +575,12 @@ export class MemorySignalRepository implements SignalRepository {
         contentHash: item.contentHash,
         author: item.author || null,
         query,
+        discovery: {
+          trustLevel: provider === 'x' ? 'authoritative' : source.metadata.mode === 'discovery' ? 'indexed' : 'unknown',
+          creatorHandle: typeof providerRaw.creator_username === 'string' ? providerRaw.creator_username : null,
+          externalUrls: Array.isArray(providerRaw.external_urls)
+            ? providerRaw.external_urls.filter((value): value is string => typeof value === 'string') : [],
+        },
       },
       ...conversationField(item.rawPayload),
       freshness: {

@@ -41,7 +41,10 @@ describe('official social discovery adapters', () => {
       (async (input: RequestInfo | URL, init?: RequestInit) => {
         calls.push({ url: new URL(input.toString()), headers: new Headers(init?.headers) });
         return new Response(JSON.stringify({
-          data: [{ id: '123', author_id: 'u1', text: 'AI product evidence needs a production failure boundary.', created_at: '2026-07-19T10:00:00Z' }],
+          data: [{
+            id: '123', author_id: 'u1', text: 'AI product evidence needs a production failure boundary.', created_at: '2026-07-19T10:00:00Z',
+            entities: { urls: [{ expanded_url: 'https://maker.example/launch' }, { expanded_url: 'https://x.com/productfounder/status/123' }] },
+          }],
           includes: { users: [{ id: 'u1', name: 'Product Founder', username: 'productfounder' }] },
         }), { status: 200 });
       }) as typeof fetch,
@@ -49,13 +52,46 @@ describe('official social discovery adapters', () => {
     );
     expect(calls[0]?.url.searchParams.get('query')).toBe('AI product evidence');
     expect(calls[0]?.url.searchParams.get('max_results')).toBe('10');
+    expect(calls[0]?.url.searchParams.get('tweet.fields')).toContain('entities');
     expect(calls[0]?.headers.get('authorization')).toBe('Bearer x-test-token');
     expect(result.entries[0]).toMatchObject({
       url: 'https://x.com/productfounder/status/123',
       author: 'Product Founder',
       publishedAt: '2026-07-19T10:00:00.000Z',
     });
-    expect(result.entries[0]?.raw).toMatchObject({ provider: 'x', query: 'AI product evidence' });
+    expect(result.entries[0]?.raw).toMatchObject({
+      provider: 'x', query: 'AI product evidence',
+      raw: { creator_username: 'productfounder', external_urls: ['https://maker.example/launch'] },
+    });
+  });
+
+  it('uses Brave as an indexed fallback without treating it as authoritative X data', async () => {
+    const original = process.env.BRAVE_SEARCH_API_KEY;
+    process.env.BRAVE_SEARCH_API_KEY = 'brave-test-token';
+    try {
+      const calls: Array<{ url: URL; headers: Headers }> = [];
+      const result = await fetchDiscoveryEntries(
+        source('brave', 'https://api.search.brave.com/res/v1/web/search'),
+        (async (input: RequestInfo | URL, init?: RequestInit) => {
+          calls.push({ url: new URL(input.toString()), headers: new Headers(init?.headers) });
+          return new Response(JSON.stringify({ web: { results: [{
+            title: 'I built a public map', url: 'https://x.com/maker/status/456', description: 'A creator launch post.',
+          }] } }), { status: 200 });
+        }) as typeof fetch,
+        new AbortController().signal,
+      );
+      expect(calls[0]?.headers.get('x-subscription-token')).toBe('brave-test-token');
+      expect(calls[0]?.url.searchParams.get('q')).toBe('AI product evidence');
+      expect(calls[0]?.url.searchParams.get('count')).toBe('5');
+      expect(result.entries[0]).toMatchObject({
+        url: 'https://x.com/maker/status/456',
+        summary: 'A creator launch post.',
+        raw: { provider: 'brave' },
+      });
+    } finally {
+      if (original === undefined) delete process.env.BRAVE_SEARCH_API_KEY;
+      else process.env.BRAVE_SEARCH_API_KEY = original;
+    }
   });
 
   it('normalizes official YouTube search results without placing the key in the URL', async () => {
@@ -353,6 +389,45 @@ describe('official social discovery adapters', () => {
     } finally {
       if (original === undefined) delete process.env.TAVILY_API_KEY;
       else process.env.TAVILY_API_KEY = original;
+    }
+  });
+
+  it('uses Serper with its dedicated key header and normalizes organic results', async () => {
+    const original = process.env.SERPER_API_KEY;
+    process.env.SERPER_API_KEY = 'serper-test-token';
+    try {
+      const serperSource = source('serper', 'https://google.serper.dev/search');
+      serperSource.metadata = {
+        mode: 'discovery', provider: 'serper', queries: ['I built interactive map'], max_results_per_query: 5,
+      };
+      let seenHeader: string | null = null;
+      let seenBody: unknown;
+      const result = await fetchDiscoveryEntries(
+        serperSource,
+        (async (_input: RequestInfo | URL, init?: RequestInit) => {
+          seenHeader = new Headers(init?.headers).get('x-api-key');
+          seenBody = JSON.parse(String(init?.body));
+          return new Response(JSON.stringify({ organic: [{
+            title: 'A map I built',
+            link: 'https://example.com/interactive-map',
+            snippet: 'A public interactive map made by its creator.',
+            date: 'Aug 28, 2026',
+          }] }), { status: 200 });
+        }) as typeof fetch,
+        new AbortController().signal,
+      );
+
+      expect(seenHeader).toBe('serper-test-token');
+      expect(seenBody).toEqual({ q: 'I built interactive map', num: 5, gl: 'us', hl: 'en' });
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0]).toMatchObject({
+        title: 'A map I built',
+        url: 'https://example.com/interactive-map',
+        summary: 'A public interactive map made by its creator.',
+      });
+    } finally {
+      if (original === undefined) delete process.env.SERPER_API_KEY;
+      else process.env.SERPER_API_KEY = original;
     }
   });
 });

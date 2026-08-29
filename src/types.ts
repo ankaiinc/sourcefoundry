@@ -200,6 +200,11 @@ export interface PublicSignal {
     contentHash: string;
     author: string | null;
     query: string | null;
+    discovery?: {
+      trustLevel: 'authoritative' | 'indexed' | 'unknown';
+      creatorHandle: string | null;
+      externalUrls: string[];
+    };
   };
   conversation?: SignalConversation;
   freshness: {

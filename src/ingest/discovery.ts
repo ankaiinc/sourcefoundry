@@ -2,7 +2,7 @@ import { sha256 } from '../hash.js';
 import type { JsonRecord, SignalConversation, SignalConversationParticipant, SignalSource, SourceEntry } from '../types.js';
 import { canonicalizeUrl } from '../url.js';
 
-export type DiscoveryProvider = 'firecrawl' | 'tavily' | 'exa' | 'serper' | 'github' | 'x' | 'youtube' | 'youtube-comments' | 'apify' | 'generic';
+export type DiscoveryProvider = 'firecrawl' | 'tavily' | 'brave' | 'exa' | 'serper' | 'github' | 'x' | 'youtube' | 'youtube-comments' | 'apify' | 'generic';
 
 type DiscoveryItem = {
   title: string;
@@ -89,7 +89,7 @@ function requestUrl(source: SignalSource, query: string, limit: number): string 
   if (provider === 'x') {
     url.searchParams.set('query', query);
     url.searchParams.set('max_results', String(Math.min(100, Math.max(10, limit))));
-    url.searchParams.set('tweet.fields', 'author_id,created_at,conversation_id,public_metrics');
+    url.searchParams.set('tweet.fields', 'author_id,created_at,conversation_id,entities,public_metrics');
     url.searchParams.set('expansions', 'author_id');
     url.searchParams.set('user.fields', 'id,name,username');
     return url.toString();
@@ -121,6 +121,12 @@ function requestUrl(source: SignalSource, query: string, limit: number): string 
     url.searchParams.set('per_page', String(Math.min(30, limit)));
     return url.toString();
   }
+  if (provider === 'brave') {
+    url.searchParams.set('q', query);
+    url.searchParams.set('count', String(Math.min(20, limit)));
+    url.searchParams.set('extra_snippets', 'true');
+    return url.toString();
+  }
   const queryParam = typeof source.metadata.query_param === 'string' ? source.metadata.query_param : 'q';
   const limitParam = typeof source.metadata.limit_param === 'string' ? source.metadata.limit_param : 'limit';
   url.searchParams.set(queryParam, query);
@@ -141,6 +147,7 @@ function discoveryProvider(value: unknown): DiscoveryProvider {
   if (value === 'exa') return 'exa';
   if (value === 'serper') return 'serper';
   if (value === 'github') return 'github';
+  if (value === 'brave') return 'brave';
   if (value === 'x') return 'x';
   if (value === 'youtube') return 'youtube';
   if (value === 'youtube-comments') return 'youtube-comments';
@@ -149,7 +156,7 @@ function discoveryProvider(value: unknown): DiscoveryProvider {
 }
 
 function requestMethod(source: SignalSource): 'GET' | 'POST' {
-  if (source.metadata.provider === 'github' || source.metadata.provider === 'x' || source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments') return 'GET';
+  if (source.metadata.provider === 'github' || source.metadata.provider === 'x' || source.metadata.provider === 'brave' || source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments') return 'GET';
   return source.metadata.method === 'GET' ? 'GET' : 'POST';
 }
 
@@ -169,6 +176,9 @@ function requestHeaders(source: SignalSource): Record<string, string> {
   } else if (source.metadata.provider === 'serper') {
     if (!token) throw new Error('Serper discovery source is missing SERPER_API_KEY');
     headers['x-api-key'] = token;
+  } else if (source.metadata.provider === 'brave') {
+    if (!token) throw new Error('Brave discovery source is missing BRAVE_SEARCH_API_KEY');
+    headers['x-subscription-token'] = token;
   } else if (source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments') {
     if (!token) throw new Error('YouTube discovery source is missing YOUTUBE_API_KEY');
     headers['x-goog-api-key'] = token;
@@ -185,17 +195,19 @@ function discoveryToken(source: SignalSource): string {
       ? 'TAVILY_API_KEY'
       : source.metadata.provider === 'exa'
         ? 'EXA_API_KEY'
-      : source.metadata.provider === 'serper'
+        : source.metadata.provider === 'serper'
           ? 'SERPER_API_KEY'
-        : source.metadata.provider === 'github'
-          ? 'GITHUB_TOKEN'
-      : source.metadata.provider === 'x'
-        ? 'X_API_BEARER_TOKEN'
-        : source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments'
-          ? 'YOUTUBE_API_KEY'
-          : source.metadata.provider === 'apify'
-            ? 'APIFY_API_TOKEN'
-            : 'FIRECRAWL_API_KEY';
+          : source.metadata.provider === 'github'
+            ? 'GITHUB_TOKEN'
+            : source.metadata.provider === 'brave'
+              ? 'BRAVE_SEARCH_API_KEY'
+              : source.metadata.provider === 'x'
+                ? 'X_API_BEARER_TOKEN'
+                : source.metadata.provider === 'youtube' || source.metadata.provider === 'youtube-comments'
+                  ? 'YOUTUBE_API_KEY'
+                  : source.metadata.provider === 'apify'
+                    ? 'APIFY_API_TOKEN'
+                    : 'FIRECRAWL_API_KEY';
   return process.env[envName] ?? process.env.SOURCEFOUNDRY_DISCOVERY_API_TOKEN ?? '';
 }
 
@@ -302,8 +314,10 @@ function normalizeDiscoveryItems(body: unknown, provider: DiscoveryProvider): Di
   if (provider === 'github') return normalizeGitHubItems(body);
   if (provider === 'exa') return normalizeExaItems(body);
   if (provider === 'serper') return normalizeSerperItems(body);
-  const records = candidateArrays(body)
-    .find((items) => items.length > 0) ?? [];
+  const root = objectValue(body);
+  const records = provider === 'brave' && Array.isArray(objectValue(root.web).results)
+      ? objectValue(root.web).results as unknown[]
+      : candidateArrays(body).find((items) => items.length > 0) ?? [];
 
   return records
     .filter((item): item is Record<string, unknown> => item !== null && typeof item === 'object' && !Array.isArray(item))
@@ -420,15 +434,36 @@ function normalizeXItems(body: unknown): DiscoveryItem[] {
     if (!id || !text) return [];
     const user = userById.get(firstString(tweet.author_id)) ?? {};
     const username = firstString(user.username);
+    const entities = objectValue(tweet.entities);
+    const externalUrls = (Array.isArray(entities.urls) ? entities.urls : [])
+      .flatMap((value) => {
+        const entity = objectValue(value);
+        const expanded = firstString(entity.unwound_url, entity.expanded_url);
+        return expanded && !isXUrl(expanded) ? [expanded] : [];
+      });
     return [{
       title: cleanText(text).slice(0, 180),
       url: username ? `https://x.com/${username}/status/${id}` : `https://x.com/i/web/status/${id}`,
       summary: cleanText(text),
       author: firstString(user.name, username, tweet.author_id),
       publishedAt: parseDate(firstString(tweet.created_at)),
-      raw: tweet,
+      raw: {
+        ...tweet,
+        creator_username: username || null,
+        creator_name: firstString(user.name) || null,
+        external_urls: [...new Set(externalUrls)],
+      },
     }];
   });
+}
+
+function isXUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === 'x.com' || hostname.endsWith('.x.com') || hostname === 'twitter.com' || hostname.endsWith('.twitter.com');
+  } catch {
+    return false;
+  }
 }
 
 function normalizeYouTubeItems(body: unknown): DiscoveryItem[] {
@@ -783,6 +818,10 @@ function validateApifyRun(source: SignalSource, queries: string[]): void {
 
 export function validateDiscoverySourceConfiguration(source: SignalSource): void {
   const provider = discoveryProvider(source.metadata.provider);
+  if (provider === 'brave') {
+    validateOfficialSearchEndpoint(source.url, 'Brave', 'api.search.brave.com', ['/res/v1/web/search']);
+    return;
+  }
   if (provider === 'exa') {
     validateOfficialSearchEndpoint(source.url, 'Exa', 'api.exa.ai', ['/search']);
     return;
@@ -886,5 +925,7 @@ function providerResultLimit(provider: DiscoveryProvider, requested: number): nu
     ? Math.min(10, requested)
     : provider === 'github'
       ? Math.min(30, requested)
+      : provider === 'brave'
+        ? Math.min(20, requested)
     : requested;
 }
