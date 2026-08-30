@@ -56,6 +56,23 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
       '/health': { get: operation('Process liveness', 'Returns public service identity and release.', { security: [] }) },
       '/ready': { get: operation('Service readiness', 'Returns readiness after a database connectivity check.', { security: [] }) },
       '/v1/meta': { get: operation('Discover agent capabilities', 'Returns the supported agent workflow and authentication boundary.', { security: [] }) },
+      '/v1/discovery-options': { get: operation('List discovery options', 'Lists supported surfaces, access methods, cost and reliability tiers, reusable bundles, credential names, and caveats without returning secret values.', { security: [] }) },
+      '/v1/discovery-plans/resolve': {
+        post: operation('Resolve a discovery plan', 'Ranks primary and fallback methods for the consumer’s selected surfaces and constraints. Resolution is read-only and does not approve spend or create sources.', {
+          security: [],
+          requestBody: jsonBody({
+            type: 'object', properties: {
+              bundle: { type: 'string', enum: ['official-first', 'reliable-balanced', 'free-and-owned', 'broad-discovery', 'creator-attribution'] },
+              surfaces: { type: 'array', items: { type: 'string', enum: ['web', 'x', 'youtube', 'linkedin', 'reddit', 'github', 'hacker-news', 'product-hunt', 'rss', 'podcasts', 'instagram-tiktok'] } },
+              maxCostTier: { type: 'string', enum: ['free', 'quota', 'paid', 'enterprise'] },
+              allowCrawlers: { type: 'boolean' },
+              requireAuthoritative: { type: 'boolean' },
+              excludedProviders: { type: 'array', items: { type: 'string' } },
+              fallbacksPerSurface: { type: 'integer', minimum: 0, maximum: 4 },
+            },
+          }),
+        }),
+      },
       '/llms.txt': { get: operation('Read the agent guide', 'A machine-discoverable alias for the SourceFoundry agent guide.', { security: [] }) },
       '/v1/agent-enrollments': {
         post: operation('Create an autonomous workspace', 'Creates a tenant-scoped credential and returns its secret exactly once. No authentication is required.', {

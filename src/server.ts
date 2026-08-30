@@ -17,6 +17,7 @@ import {
 import { createAgentToken, tokenHash, tokenPrefix, validateAgentSourcePolicy } from './agent-access.js';
 import { landingPage } from './landing.js';
 import { robotsTxt, sitemapXml } from './public-discovery.js';
+import { discoveryCatalog, resolveDiscoveryPlan, type DiscoveryPlanRequest } from './discovery-catalog.js';
 import type { AgentCredential, SignalSource, SourceFeed, SourceFeedRun } from './types.js';
 import { buildSourceFeed, enqueueSourceFeedRun, SourceFeedRunLimitError, type SourceFeedSourceRequest } from './source-feeds.js';
 import {
@@ -97,7 +98,7 @@ const server = http.createServer(async (req, res) => {
         schemaVersion: SOURCEFOUNDRY_SCHEMA_VERSION,
         release: config.releaseSha,
         service: 'sourcefoundry',
-        capabilities: ['source-feeds:build', 'source-feeds:run', 'source-feeds:read', 'source-feeds:health', 'signals:list', 'sources:list', 'sources:create', 'ingest:enqueue', 'jobs:run-once'],
+        capabilities: ['discovery-options:list', 'discovery-plans:resolve', 'source-feeds:build', 'source-feeds:run', 'source-feeds:read', 'source-feeds:health', 'signals:list', 'sources:list', 'sources:create', 'ingest:enqueue', 'jobs:run-once'],
         authentication: {
           type: 'http-bearer',
           environmentVariable: 'SOURCEFOUNDRY_API_TOKEN',
@@ -116,6 +117,19 @@ const server = http.createServer(async (req, res) => {
           llms: `${config.publicBaseUrl}${SOURCEFOUNDRY_LLMS_PATH}`,
         },
       });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/v1/discovery-options') {
+      return send(res, 200, discoveryCatalog());
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/discovery-plans/resolve') {
+      const body = await readJson(req);
+      try {
+        return send(res, 200, resolveDiscoveryPlan(body as DiscoveryPlanRequest));
+      } catch (error) {
+        throw new ApiError(400, 'bad_request', error instanceof Error ? error.message : String(error));
+      }
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/agent-enrollments') {
