@@ -4,6 +4,11 @@ All notable SourceFoundry changes are recorded here. The project follows semanti
 
 ## [Unreleased]
 
+### Added
+
+- Consumer apps can list 11 discovery surfaces and compare official, free, indexed, and crawler-backed access methods by cost, reliability, coverage, authority, and credential requirements.
+- Consumer apps can resolve reusable discovery policies into ranked primary and fallback methods without creating sources, exposing secrets, or silently approving provider spend.
+
 ## [0.1.0] - 2026-08-26
 
 ### Added
