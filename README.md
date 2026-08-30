@@ -97,6 +97,27 @@ Example discovery source:
 
 The provider key is never sent in this request. It stays in the SourceFoundry worker's secret environment.
 
+## Choose discovery sources by policy
+
+Consumer apps can ask SourceFoundry which discovery options exist instead of hard-coding one provider. `GET /v1/discovery-options` lists 11 source surfaces, their official APIs, public feeds, search indexes, and reviewed crawler options, plus cost, reliability, coverage, authority, credentials, and practical caveats. Secret values are never returned.
+
+`POST /v1/discovery-plans/resolve` turns a consumer’s preferences into a ranked, provider-neutral plan. Choose a reusable bundle, select surfaces such as X, YouTube, LinkedIn, GitHub, Reddit, RSS, or podcasts, cap the cost tier, prohibit crawlers, require authoritative evidence, or prefer and exclude specific providers.
+
+```json
+{
+  "bundle": "reliable-balanced",
+  "surfaces": ["x", "youtube", "linkedin", "github"],
+  "preferredProviders": {
+    "x": ["x"],
+    "youtube": ["youtube"],
+    "linkedin": ["web-index"]
+  },
+  "fallbacksPerSurface": 2
+}
+```
+
+Built-in bundles are `official-first`, `reliable-balanced`, `free-and-owned`, `broad-discovery`, and `creator-attribution`. Plan resolution is read-only. Creating recurring sources and approving paid-provider spend remain explicit actions.
+
 ## MCP
 
 The MCP adapter exposes two high-level tools: `build_source_feed` and `read_source_feed`.
