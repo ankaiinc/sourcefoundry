@@ -1,3 +1,4 @@
+import { fetchGoogleReviews } from './google-reviews.js';
 import { sha256 } from '../hash.js';
 import type { JsonRecord, SignalConversation, SignalConversationParticipant, SignalSource, SourceEntry } from '../types.js';
 import { canonicalizeUrl } from '../url.js';
@@ -27,6 +28,7 @@ export async function fetchDiscoveryEntries(
 ): Promise<DiscoveryFetchResult> {
   const provider = discoveryProvider(source.metadata.provider);
   validateDiscoverySourceConfiguration(source);
+  if (provider === 'serper' && new URL(source.url).pathname === '/reviews') return fetchGoogleReviews(source, fetchFn, signal);
   const queries = queryOverride ?? discoveryQueries(source);
   if (queries.length === 0) {
     if (queryOverride !== undefined) return { entries: [], httpStatus: null };
@@ -257,7 +259,7 @@ function requestBody(
     const body: JsonRecord = {
       query,
       type: firstString(source.metadata.search_type) || 'fast',
-      category: firstString(source.metadata.category) || 'news',
+      ...(source.metadata.category === 'general' ? {} : {category: firstString(source.metadata.category) || 'news'}),
       numResults: limit,
       contents: {
         text: { maxCharacters: boundedPositiveInt(source.metadata.max_content_characters, 2_000, 5_000) },
@@ -827,7 +829,7 @@ export function validateDiscoverySourceConfiguration(source: SignalSource): void
     return;
   }
   if (provider === 'serper') {
-    validateOfficialSearchEndpoint(source.url, 'Serper', 'google.serper.dev', ['/news', '/search']);
+    validateOfficialSearchEndpoint(source.url, 'Serper', 'google.serper.dev', ['/news', '/search', '/reviews']);
     return;
   }
   if (provider === 'tavily') {

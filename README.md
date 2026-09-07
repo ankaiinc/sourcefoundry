@@ -152,3 +152,20 @@ npm run build
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SUPPORT.md](SUPPORT.md), [SECURITY.md](SECURITY.md), the [changelog](CHANGELOG.md), and the [MIT license](LICENSE).
+
+## Bounded Google place reviews
+
+The low-level source API also accepts `provider: "serper"`, `mode: "discovery"`,
+`url: "https://google.serper.dev/reviews"`, and `queries: ["<exact Google place ID>"]`.
+The worker uses its existing `SERPER_API_KEY`; never include that key in metadata.
+`max_pages` defaults to 3 and is limited to 1–5. `maxItemsPerFetch` bounds unique
+returned reviews and the existing workspace policy still applies. Low-level
+sources accept intervals through 43,200 minutes (30 days); 21,600 is 15 days.
+
+The collector follows `nextPageToken`, deduplicates original review links, and
+reports received/returned counts, pages and partial state in
+`provenance.reviewCollection`. Exhausted credits, malformed responses and repeated
+cursors fail the job instead of producing an empty successful run. Missing text
+or original Google review links are excluded. Collection does not confer content
+rights or establish that a restaurant visit happened. A live response schema
+still needs verification after the configured Serper account is funded.

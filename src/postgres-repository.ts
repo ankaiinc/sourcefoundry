@@ -911,6 +911,15 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
           contentHash: String(row.content_hash),
           author: author || null,
           query: typeof rawDiscovery.query === 'string' && rawDiscovery.query.trim() ? rawDiscovery.query : null,
+          ...(rawDiscovery.observationMode === 'review' && typeof rawDiscovery.placeId === 'string' ? {
+            reviewCollection: {
+              placeId: rawDiscovery.placeId,
+              pagesFetched: Number(objectValue(rawDiscovery.collection).pagesFetched ?? 0),
+              recordsReceived: Number(objectValue(rawDiscovery.collection).recordsReceived ?? 0),
+              reviewsReturned: Number(objectValue(rawDiscovery.collection).reviewsReturned ?? 0),
+              partial: objectValue(rawDiscovery.collection).partial !== false,
+            },
+          } : {}),
           discovery: {
             trustLevel: sourceMetadata.provider === 'x' ? 'authoritative' as const
               : sourceMetadata.mode === 'discovery' ? 'indexed' as const

@@ -269,7 +269,7 @@ const server = http.createServer(async (req, res) => {
         metadata: objectBody(body.metadata),
       };
       assignOptionalNumber(sourceInput, 'reliability', body.reliability, { minimum: 0, maximum: 1 });
-      assignOptionalNumber(sourceInput, 'intervalMinutes', body.intervalMinutes, { minimum: 1, maximum: 10_080, integer: true });
+      assignOptionalNumber(sourceInput, 'intervalMinutes', body.intervalMinutes, { minimum: 1, maximum: 43_200, integer: true });
       assignOptionalNumber(sourceInput, 'maxItemsPerFetch', body.maxItemsPerFetch, { minimum: 1, maximum: 100, integer: true });
       assignOptionalNumber(sourceInput, 'timeoutSeconds', body.timeoutSeconds, { minimum: 1, maximum: 300, integer: true });
 

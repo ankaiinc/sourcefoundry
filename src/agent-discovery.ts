@@ -169,7 +169,7 @@ export function openApiDocument(config: Pick<SourceFoundryConfig, 'publicBaseUrl
               sourceType: { type: 'string', enum: ['rss', 'atom', 'web'] },
               url: { type: 'string', format: 'uri', example: 'https://api.tavily.com/search' },
               reliability: { type: 'number', minimum: 0, maximum: 1, default: 0.7 },
-              intervalMinutes: { type: 'integer', minimum: 1, maximum: 10080, default: 60 },
+              intervalMinutes: { type: 'integer', minimum: 1, maximum: 43200, default: 60 },
               maxItemsPerFetch: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
               timeoutSeconds: { type: 'integer', minimum: 1, maximum: 300, default: 20 },
               metadata: {

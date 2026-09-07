@@ -200,6 +200,7 @@ export interface PublicSignal {
     contentHash: string;
     author: string | null;
     query: string | null;
+    reviewCollection?: { placeId: string; pagesFetched: number; recordsReceived: number; reviewsReturned: number; partial: boolean };
     discovery?: {
       trustLevel: 'authoritative' | 'indexed' | 'unknown';
       creatorHandle: string | null;
