@@ -16,6 +16,6 @@
   "publishConfig": { "access": "public" },
   "engines": { "node": ">=20" },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.30.1"
   }
 }
