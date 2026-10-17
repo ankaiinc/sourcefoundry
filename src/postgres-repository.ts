@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { listJobPostings, refreshJobPostings } from './job-postings.js';
 import type {
   AgentCredential,
   CandidateInput,
@@ -40,6 +41,10 @@ export class PostgresSourceFoundryRepository implements SignalRepository {
       max: 10,
     });
   }
+
+  listJobPostings(source: string, limit: number) { return listJobPostings(this.pool, source, limit); }
+
+  refreshJobPostings(source: string) { return refreshJobPostings(this.pool, source); }
 
   async close(): Promise<void> {
     await this.pool.end();

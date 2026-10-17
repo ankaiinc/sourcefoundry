@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { JobPostingError, validateJobRequest } from './job-postings.js';
 import { timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { loadConfig } from './config.js';
@@ -143,6 +144,16 @@ const server = http.createServer(async (req, res) => {
     const access = await authenticate(req);
     if (!access) {
       return sendError(res, 401, 'unauthorized', 'Unauthorized', false);
+    }
+
+    if (url.pathname === '/v1/job-postings' || url.pathname === '/v1/job-postings/refresh') {
+      const refresh = req.method === 'POST' && url.pathname.endsWith('/refresh');
+      if (!refresh && !(req.method === 'GET' && url.pathname === '/v1/job-postings')) return sendError(res, 404, 'not_found', 'Not found', false);
+      const input = refresh ? await readJson(req) : { source: url.searchParams.get('source') };
+      if (Object.keys(input).some(key => key !== 'source')) throw new ApiError(400, 'bad_request', 'Only a public source is accepted');
+      if ([...url.searchParams.keys()].some(key => key !== 'source' && key !== 'limit')) throw new ApiError(400, 'bad_request', 'Unsupported job query');
+      const source = validateJobRequest(access.kind, input.source);
+      return send(res, 200, versioned(refresh ? await repo.refreshJobPostings(source) : await repo.listJobPostings(source, Number(url.searchParams.get('limit') ?? 200))));
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/tenants') {
@@ -405,6 +416,7 @@ const server = http.createServer(async (req, res) => {
 
     return sendError(res, 404, 'not_found', 'Not found', false);
   } catch (error) {
+    if (error instanceof JobPostingError) return sendError(res, error.status, error.status === 403 ? 'forbidden' : error.status === 404 ? 'not_found' : error.status === 503 ? 'not_ready' : 'bad_request', error.message, error.status >= 500);
     if (error instanceof ApiError) {
       return sendError(res, error.status, error.code, error.message, error.status >= 500);
     }
