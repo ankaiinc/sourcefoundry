@@ -21,7 +21,7 @@ describe('bounded public ATS connectors', () => {
     const fetch = vi.fn(async () => reply({ jobs: [{ ...workable, url: 'https://attacker.example' }] }));
     const result = await fetchJobSnapshot('workable:acme', fetch);
     expect(result.complete).toBe(true);
-    expect(result.jobs[0]).toMatchObject({ id: 'workable:acme:job-1', location: 'Bengaluru, India', description: workable.description,
+    expect(result.jobs[0]).toMatchObject({ id: 'job-1', location: 'Bengaluru, India', description: workable.description,
       url: 'https://apply.workable.com/j/job-1/', publishedAt: '2026-10-01T00:00:00.000Z' });
     expect(fetch.mock.calls).toHaveLength(1);
   });

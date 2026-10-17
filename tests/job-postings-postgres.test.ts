@@ -8,8 +8,8 @@ it.skipIf(!process.env.JOB_POSTINGS_TEST_DATABASE_URL)('preserves evidence and c
   const pool = new pg.Pool({ connectionString: process.env.JOB_POSTINGS_TEST_DATABASE_URL });
   try {
     await pool.query(readFileSync(new URL('../migrations/004_job_postings.sql', import.meta.url), 'utf8'));
-    const job = { id: 'workable:acme:1', url: 'https://apply.workable.com/j/1/', title: 'PM', company: 'acme', location: 'India', description: 'Full description', publishedAt: '2026-10-01T00:00:00Z' };
-    await refreshJobPostings(pool, 'workable:acme', async () => ({ jobs: [job], complete: true, error: null }));
+    const job = { id: '1', url: 'https://apply.workable.com/j/1/', title: 'PM', company: 'acme', location: 'India', description: 'Full description', publishedAt: '2026-10-01T00:00:00Z' };
+    await refreshJobPostings(pool, 'workable:acme', async () => ({ jobs: [job], complete: false, error: 'bounded initial snapshot' }));
     const initial = (await listJobPostings(pool, 'workable:acme', 200)).jobs[0]!;
     await refreshJobPostings(pool, 'workable:acme', async () => ({ jobs: [], complete: false, error: 'provider failure' }));
     const failed = await listJobPostings(pool, 'workable:acme', 200);
