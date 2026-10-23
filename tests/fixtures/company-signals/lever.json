@@ -1,0 +1,4 @@
+[
+ {"id":"l1","text":"Site Reliability Engineer","hostedUrl":"https://jobs.lever.co/acme/l1","categories":{"location":"Bengaluru"},"createdAt":1759276800000,"descriptionPlain":"Acme runs multi-region on AWS (us-east-1, eu-west-1).","lists":[{"text":"Requirements","content":"<li>Pulumi</li><li>SOC 2 audits</li>"}]},
+ {"id":"l2","text":"","hostedUrl":"https://jobs.lever.co/acme/l2"}
+]

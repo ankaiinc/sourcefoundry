@@ -1,0 +1,4 @@
+{"apiVersion":"1","jobs":[
+ {"id":"a1","title":"Infrastructure Engineer","jobUrl":"https://jobs.ashbyhq.com/roboflow/a1","location":"Remote","publishedAt":"2026-10-10T00:00:00.000Z","isListed":true,"descriptionPlain":"Roboflow trains models on GCP with GKE. Find cost optimization opportunities across our training fleet."},
+ {"id":"a2","title":"Hidden role","jobUrl":"https://jobs.ashbyhq.com/roboflow/a2","isListed":false,"descriptionPlain":"Unlisted."}
+]}

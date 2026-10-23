@@ -1,0 +1,4 @@
+<?xml version="1.0"?><rss version="2.0"><channel><title>Blog</title>
+<item><title>How we cut our AWS bill by 40%</title><link>https://example.dev/blog/aws-bill</link><pubDate>Mon, 05 Oct 2026 10:00:00 GMT</pubDate><description>We moved batch jobs to spot instances and reduced our cloud costs.</description></item>
+<item><title>Welcome our new VP Sales</title><link>https://example.dev/blog/vp</link><pubDate>Mon, 05 Oct 2026 10:00:00 GMT</pubDate><description>Say hi.</description></item>
+</channel></rss>
