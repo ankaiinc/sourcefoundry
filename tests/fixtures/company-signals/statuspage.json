@@ -1,0 +1,4 @@
+{"incidents":[
+ {"id":"inc1","name":"Elevated API latency","created_at":"2026-10-15T10:00:00Z","shortlink":"https://stspg.io/abc"},
+ {"id":"inc2","name":"Old outage","created_at":"2026-03-01T10:00:00Z"}
+]}
