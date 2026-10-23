@@ -1,2 +1,8 @@
 [extend]
 useDefault = true
+
+# data/ats-slugs.json is a public list of company job-board names (from the
+# open-jobs fleet). Names like "confluent" trip token rules; it holds no secrets.
+[[allowlists]]
+description = "public ATS board slugs"
+paths = ['''^data/ats-slugs\.json$''']
